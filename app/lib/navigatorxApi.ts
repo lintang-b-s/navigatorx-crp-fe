@@ -77,7 +77,7 @@ export const fetchRouteCRP = async ({
 }: RouteRequest): Promise<RouteCRPResponseWrapper> => {
   try {
     const { data } = await axios.get(
-      `http://localhost:6060/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
+      `http://www.navigatorx.lintangbs.my.id/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
       {}
     );
 
