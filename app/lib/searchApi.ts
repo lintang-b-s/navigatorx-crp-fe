@@ -32,7 +32,7 @@ export const fetchSearch = async (
       lon: lon,
     };
     const { data } = await axios.get(
-      `http://navigatorx.lintangbs.my.id/search/api/autocomplete?query=${param.query}&top_k=${param.topk}&offset=${param.offset}&lat=${param.lat}&lon=${param.lon}`,
+      `https://navigatorx.lintangbs.my.id/search/api/autocomplete?query=${param.query}&top_k=${param.topk}&offset=${param.offset}&lat=${param.lat}&lon=${param.lon}`,
       {}
     );
     return data;
@@ -66,7 +66,7 @@ export const fetchReverseGeocoding = async ({
       lon: lon,
     };
     const { data } = await axios.get(
-      `http://navigatorx.lintangbs.my.id/search/api/reverse?lat=${param.lat}&lon=${param.lon}`,
+      `https://navigatorx.lintangbs.my.id/search/api/reverse?lat=${param.lat}&lon=${param.lon}`,
       {}
     );
     return data;
