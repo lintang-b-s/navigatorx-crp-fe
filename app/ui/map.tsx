@@ -41,21 +41,21 @@ export function MapComponent({
   } | null>(null);
 
   const [viewState, setViewState] = React.useState({
-    longitude: -100,
-    latitude: 40,
-    zoom: 3.5,
+    longitude: 110.37432,
+    latitude: -7.78787,
+    zoom: 13,
   });
 
   useEffect(() => {
-    if (routeStarted && snappedGPSLoc) {
-      // update view state to user current snapped gps location
-      setViewState({
-        longitude: snappedGPSLoc!.lon,
-        latitude: snappedGPSLoc!.lat,
-        zoom: 16,
-      });
-      return;
-    }
+    // if (routeStarted && snappedGPSLoc) {
+    //   // update view state to user current snapped gps location
+    //   setViewState({
+    //     longitude: snappedGPSLoc!.lon,
+    //     latitude: snappedGPSLoc!.lat,
+    //     zoom: 16,
+    //   });
+    //   return;
+    // }
     if (isDirectionActive) {
       if (activeRoute == 0) {
         let zoomLevel = 15;
@@ -128,24 +128,24 @@ export function MapComponent({
     }
   }, [nextTurnIndex]);
 
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setViewState({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            zoom: 15,
-          });
-        },
-        (error) => {
-          toast.error(error.message);
-        }
-      );
-    } else {
-      toast.error("Geolocation is not supported by this browser.");
-    }
-  }, []);
+  // useEffect(() => {
+  //   if (navigator.geolocation) {
+  //     navigator.geolocation.getCurrentPosition(
+  //       (position) => {
+  //         setViewState({
+  //           latitude: position.coords.latitude,
+  //           longitude: position.coords.longitude,
+  //           zoom: 15,
+  //         });
+  //       },
+  //       (error) => {
+  //         toast.error(error.message);
+  //       }
+  //     );
+  //   } else {
+  //     toast.error("Geolocation is not supported by this browser.");
+  //   }
+  // }, []);
 
   return (
     <Map
@@ -311,7 +311,7 @@ export function MapComponent({
                 height={30}
                 style={{
                   transform: `rotate(${
-                   ( (turn.turn_bearing * 180) / Math.PI) - gpsHeading
+                    (turn.turn_bearing * 180) / Math.PI - gpsHeading
                   }deg)`,
                 }}
               />
@@ -424,6 +424,34 @@ export function MapComponent({
           </div>
         </Popup>
       )}
+      <Source
+        id="bounding-box"
+        type="geojson"
+        data={{
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [110.132, -8.2618],
+              [110.9221, -8.2618],
+              [110.9221, -6.888],
+              [110.132, -6.888],
+              [110.132, -8.2618],
+            ],
+          },
+          properties: {},
+        }}
+      >
+        <Layer
+          id="boundingbox-layer-layer"
+          type="line"
+          source="boundingbox-layer-source"
+          paint={{
+            "line-color": "#2B7FFF",
+            "line-width": 5,
+          }}
+        />
+      </Source>
     </Map>
   );
 }
