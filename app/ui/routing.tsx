@@ -9,7 +9,11 @@ import { useEffect, useState } from "react";
 import { RouterProps } from "../types/definition";
 import { CiGps } from "react-icons/ci";
 import { getArrivalTime, haversineDistance } from "@/app/lib/util";
-import { CumulativeDirection, RouteResponse } from "../lib/navigatorxApi";
+import {
+  CumulativeDirection,
+  RouteCRPResponse,
+  RouteResponse,
+} from "../lib/navigatorxApi";
 import { IoIosArrowBack } from "react-icons/io";
 import Image from "next/image";
 import { FaLocationArrow } from "react-icons/fa6";
@@ -192,10 +196,10 @@ function showRouteResultMobile(
                 <div className="flex flex-col  py-2 gap-2  justify-start">
                   <p className="text-xs font-semibold  ">
                     <span className="text-lg font-bold">
-                      {Math.round(route.eta).toPrecision(2)} Menit
+                      {Math.round(route.travel_time).toPrecision(2)} Menit
                     </span>
                     <span>&nbsp;&nbsp;&nbsp;</span>
-                    Tiba pada {getArrivalTime(route.eta)}{" "}
+                    Tiba pada {getArrivalTime(route.travel_time)}{" "}
                   </p>
                   <p className="text-sm text-[#4C4C4C] ">{route.distance} KM</p>
                 </div>
@@ -281,7 +285,8 @@ function showRouteEtaAndDistance(
       <div className="flex flex-col space-y-2 items-center justify-center">
         <p className="font-bold text-xl tracking-wide ">
           {new Date(
-            nowTime.getTime() + props.routeDataCRP![activeRoute].eta * 60000
+            nowTime.getTime() +
+              props.routeDataCRP![activeRoute].travel_time * 60000
           ).toLocaleTimeString("en-US", {
             hour: "2-digit",
             minute: "2-digit",
@@ -290,7 +295,7 @@ function showRouteEtaAndDistance(
         </p>
         <div className="flex flex-row space-x-2 items-center">
           <p className="text-base ">
-            {Math.round(props.routeDataCRP![activeRoute].eta)} menit
+            {Math.round(props.routeDataCRP![activeRoute].travel_time)} menit
           </p>
           <FaCircle size={14} color="#dedfe0" />
           <p className="text-base ">
@@ -389,10 +394,10 @@ function showRouteResult(
                 <div className="flex flex-col  py-2 gap-2  justify-start">
                   <p className="text-xs font-semibold  ">
                     <span className="text-lg font-bold">
-                      {Math.round(route.eta)} Menit
+                      {Math.round(route.travel_time)} Menit
                     </span>
                     <span>&nbsp;&nbsp;&nbsp;</span>
-                    Tiba pada {getArrivalTime(route.eta)}{" "}
+                    Tiba pada {getArrivalTime(route.travel_time)}{" "}
                   </p>
                   <p className="text-sm text-[#4C4C4C] ">{route.distance} KM</p>
                 </div>
@@ -414,25 +419,21 @@ function showRouteResult(
             ))}
         </div>
       ) : (
-        // (
-        //   showRouteDirectionsComponent(
-        //     props.routeDataCRP![activeRoute],
-        //     showDirections,
-        //     handleShowDirections,
-        //     props.handleDirectionActive,
-        //     handleSetNextTurnIndex,
-        //     handleStartRoute
-        //   )
-        // )<>
-
-        <></>
+        showRouteDirectionsComponent(
+          props.routeDataCRP![activeRoute],
+          showDirections,
+          handleShowDirections,
+          props.handleDirectionActive,
+          handleSetNextTurnIndex,
+          handleStartRoute
+        )
       )}
     </div>
   );
 }
 
 function showRouteDirectionsComponent(
-  route: RouteResponse,
+  route: RouteCRPResponse,
   showDirections: boolean = false,
   handleShowDirections: (show: boolean) => void,
   handleDirectionActive: (show: boolean) => void,
@@ -444,8 +445,8 @@ function showRouteDirectionsComponent(
   >((acc, currentDirection) => {
     const lastDirection = acc[acc.length - 1];
     const cumulativeEta = lastDirection
-      ? lastDirection.cumulativeEta + currentDirection.eta
-      : currentDirection.eta;
+      ? lastDirection.cumulativeEta + currentDirection.travel_time
+      : currentDirection.travel_time;
     const cumulativeDistance = lastDirection
       ? lastDirection.cumulativeDistance + currentDirection.distance
       : currentDirection.distance;

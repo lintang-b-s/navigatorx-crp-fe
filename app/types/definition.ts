@@ -41,7 +41,6 @@ export type MapComponentProps = {
   onUserLocationUpdateHandler: (lat: number, lon: number) => void;
   activeRoute: number;
   isDirectionActive: boolean;
-  routeData?: RouteResponse[];
   routeDataCRP?: RouteCRPResponse[];
   nextTurnIndex: number;
   onSelectSource: (place: Place) => void;

@@ -7,7 +7,7 @@ export interface Direction {
     lon: number;
   };
   street_name: string;
-  eta: number;
+  travel_time: number;
   distance: number;
   edge_ids: number[];
   polyline: string;
@@ -23,16 +23,17 @@ export interface CumulativeDirection extends Direction {
 export interface RouteResponse {
   path: string;
   distance: number;
-  ETA: number;
+  travel_time: number;
   driving_directions: Direction[];
   found: boolean;
   algorithm: string;
 }
 
 export interface RouteCRPResponse {
-  eta: number;
+  travel_time: number;
   path: string;
   distance: number;
+  driving_directions: Direction[];
 }
 
 export interface RouteCRPResponseWrapper {
@@ -77,7 +78,7 @@ export const fetchRouteCRP = async ({
 }: RouteRequest): Promise<RouteCRPResponseWrapper> => {
   try {
     const { data } = await axios.get(
-      `https://www.navigatorx.lintangbs.my.id/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
+      `http://localhost:6060/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
       {}
     );
 

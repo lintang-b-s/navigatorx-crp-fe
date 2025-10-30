@@ -27,13 +27,14 @@ export function MapComponent({
   alternativeRoutes,
   activeRoute,
   isDirectionActive,
-  routeData,
+  routeDataCRP,
   nextTurnIndex,
   onSelectSource,
   onSelectDestination,
   snappedGPSLoc,
   routeStarted,
   gpsHeading,
+  
 }: MapComponentProps) {
   const [contextMenuCoord, setContextMenuCoord] = useState<{
     lng: number;
@@ -59,9 +60,12 @@ export function MapComponent({
     if (isDirectionActive) {
       if (activeRoute == 0) {
         let zoomLevel = 15;
-        if (routeData![0].distance > 7 && routeData![0].distance < 15) {
+        if (routeDataCRP![0].distance > 7 && routeDataCRP![0].distance < 15) {
           zoomLevel = 12;
-        } else if (routeData![0].distance > 15 && routeData![0].distance < 70) {
+        } else if (
+          routeDataCRP![0].distance > 15 &&
+          routeDataCRP![0].distance < 70
+        ) {
           zoomLevel = 10;
         }
         const midIndex = Math.floor(lineData!.geometry.coordinates.length / 2);
@@ -73,13 +77,13 @@ export function MapComponent({
       } else {
         let zoomLevel = 15;
         if (
-          routeData![activeRoute].distance > 7 &&
-          routeData![activeRoute].distance < 15
+          routeDataCRP![activeRoute].distance > 7 &&
+          routeDataCRP![activeRoute].distance < 15
         ) {
           zoomLevel = 12;
         } else if (
-          routeData![activeRoute].distance > 15 &&
-          routeData![activeRoute].distance < 70
+          routeDataCRP![activeRoute].distance > 15 &&
+          routeDataCRP![activeRoute].distance < 70
         ) {
           zoomLevel = 10;
         }
@@ -95,11 +99,14 @@ export function MapComponent({
           zoom: zoomLevel,
         });
       }
-    } else if (lineData && routeData?.length! > 0) {
+    } else if (lineData && routeDataCRP?.length! > 0) {
       let zoomLevel = 15;
-      if (routeData![0].distance > 7 && routeData![0].distance < 15) {
+      if (routeDataCRP![0].distance > 7 && routeDataCRP![0].distance < 15) {
         zoomLevel = 12;
-      } else if (routeData![0].distance > 15 && routeData![0].distance < 70) {
+      } else if (
+        routeDataCRP![0].distance > 15 &&
+        routeDataCRP![0].distance < 70
+      ) {
         zoomLevel = 10;
       }
       const midIndex = Math.floor(lineData!.geometry.coordinates.length / 2);
@@ -118,8 +125,8 @@ export function MapComponent({
   ]);
 
   useEffect(() => {
-    if (nextTurnIndex != -1 && routeData) {
-      const turn = routeData[activeRoute].driving_directions[nextTurnIndex];
+    if (nextTurnIndex != -1 && routeDataCRP) {
+      const turn = routeDataCRP[activeRoute].driving_directions[nextTurnIndex];
       setViewState({
         longitude: turn.turn_point.lon,
         latitude: turn.turn_point.lat,
@@ -290,9 +297,11 @@ export function MapComponent({
       )}
 
       {isDirectionActive &&
-        routeData &&
-        routeData[activeRoute].driving_directions.map((turn, i) => {
+        routeDataCRP &&
+        routeDataCRP[activeRoute].driving_directions.map((turn, i) => {
           const turnIcon = getTurnIconDirection(turn.turn_type);
+          console.log("turn: ", turn);
+          console.log("turnIcon: ", turnIcon);
           if (turnIcon == "") {
             return null;
           }

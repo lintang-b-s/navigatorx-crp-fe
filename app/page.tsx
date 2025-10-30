@@ -149,9 +149,10 @@ export default function Home() {
       };
       const spCRPRouteData = await fetchRouteCRP(reqBody);
       const spRouteData = {
-        eta: spCRPRouteData.data.eta,
+        travel_time: spCRPRouteData.data.travel_time,
         path: spCRPRouteData.data.path,
-        distance: spCRPRouteData.data.distance,
+        distance: parseFloat((spCRPRouteData.data.distance/1000).toFixed(2)),
+        driving_directions: spCRPRouteData.data.driving_directions,
       };
 
       // const [spRouteData, alternativeRouteData] = await Promise.all([
