@@ -34,7 +34,6 @@ export function MapComponent({
   snappedGPSLoc,
   routeStarted,
   gpsHeading,
-  
 }: MapComponentProps) {
   const [contextMenuCoord, setContextMenuCoord] = useState<{
     lng: number;
@@ -46,6 +45,19 @@ export function MapComponent({
     latitude: -7.78787,
     zoom: 13,
   });
+
+  const [touchStartTime, setTouchStartTime] = useState<number | null>(null);
+
+  function handleTouchStart(evt: any) {
+    setTouchStartTime(Date.now());
+  }
+
+  function handleTouchEnd(evt: any) {
+    if (touchStartTime && Date.now() - touchStartTime > 500) {
+      setContextMenuCoord({ lng: evt.lngLat.lng, lat: evt.lngLat.lat });
+    }
+    setTouchStartTime(null);
+  }
 
   useEffect(() => {
     // if (routeStarted && snappedGPSLoc) {
@@ -172,6 +184,8 @@ export function MapComponent({
       onLoad={(e) => {
         e.target.touchZoomRotate.enableRotation();
       }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       {!routeStarted ? (
         <>
