@@ -87,7 +87,7 @@ export function Router(props: RouterProps) {
               ? "hidden"
               : "block"
           } flex flex-col  h-[180px] w-[92vw] sm:h-[200px] sm:w-[440px]  
-       items-center  absolute top-4 left-1/2 -translate-x-1/2  md:left-10 bg-white
+       items-center  absolute top-4 left-1/2 -translate-x-1/2 sm:translate-x-0  md:left-10 bg-white
         rounded-lg overflow-hidden shadow-lg props.routeDataCRP`}
         >
           <div className="flex flex-row items-center gap-2 pt-8 px-4 ">
@@ -596,6 +596,7 @@ function showRouteDirectionsComponent(
             );
           }}
         >
+          <AiOutlineThunderbolt size={18} color="white" />
           <p>Start Route</p>
           <FaLocationArrow size={20} color="white" />
         </button>
