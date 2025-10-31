@@ -5,7 +5,7 @@ import { SearchSelectorProps } from "../types/definition";
 export function SearchResults(props: SearchSelectorProps) {
   return (
     <div
-      className="absolute left-[5%] md:left-10 top-[220px] md:top-[240px] z-10  
+      className="absolute left-[5%] md:left-10 top-[200px] md:top-[240px] z-10  
     w-[355px]  md:w-[380px]   mt-1 bg-white border-2 rounded-lg shadow-lg border-[#F5F5F5]  overflow-y-scroll
      max-h-80 "
     >

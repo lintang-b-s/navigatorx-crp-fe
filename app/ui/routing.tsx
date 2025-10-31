@@ -86,8 +86,8 @@ export function Router(props: RouterProps) {
             !props.isDestinationFocused
               ? "hidden"
               : "block"
-          } flex flex-col  h-[180px] w-[355px] sm:h-[200px] sm:w-[440px]  
-       items-center  absolute top-10 left-[5%] md:left-10 bg-white
+          } flex flex-col  h-[180px] w-[92vw] sm:h-[200px] sm:w-[440px]  
+       items-center  absolute top-4 left-1/2 -translate-x-1/2  md:left-10 bg-white
         rounded-lg overflow-hidden shadow-lg props.routeDataCRP`}
         >
           <div className="flex flex-row items-center gap-2 pt-8 px-4 ">
@@ -176,11 +176,11 @@ function showRouteResultMobile(
     <div
       className={`sm:hidden flex  flex-col  ${
         routeStarted
-          ? " h-[150px] bg-[#222831] w-full  rounded-md"
-          : " h-[300px] bg-white ml-[2%] mt-[2%] w-[400px]  rounded-lg "
+          ? " h-[150px] bg-[#222831] w-[94vw]  rounded-md"
+          : " h-[300px] bg-white  mt-[2%] w-[94vw]  rounded-lg "
       } 
-   absolute top-0 md:left-0 
- overflow-y-scroll  shadow-lg props.routeDataCRP`}
+   absolute top-0 left-1/2 -translate-x-1/2 
+ overflow-y-scroll  shadow-lg `}
     >
       {!routeStarted ? (
         showDirections ? (
@@ -317,7 +317,7 @@ function showRouteResultMobile(
                   </div>
 
                   <button
-                    className={`flex ml-8 h-[30px] items-center rounded-lg bg-blue-500 px-2 
+                    className={`flex ml-8 py-1 items-center rounded-lg bg-blue-500 px-2 
                   text-sm font-mRouteedium text-white transition-colors
                    hover:bg-blue-400 focus-visible:outline 
                      focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
