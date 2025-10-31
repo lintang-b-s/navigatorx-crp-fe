@@ -19,6 +19,8 @@ import Image from "next/image";
 import { FaLocationArrow } from "react-icons/fa6";
 import { FaCircle } from "react-icons/fa6";
 import toast from "react-hot-toast";
+import { AiOutlineThunderbolt } from "react-icons/ai";
+
 import { FaCheck } from "react-icons/fa";
 
 export function Router(props: RouterProps) {
@@ -54,7 +56,10 @@ export function Router(props: RouterProps) {
             props.activeRoute,
             props.handleRouteClick,
             props.routeStarted,
-            props.handleStartRoute
+            props.handleStartRoute,
+            showDirections,
+            handleShowDirections,
+            props.handleSetNextTurnIndex
           )}
           {showRouteResult(
             props,
@@ -139,8 +144,34 @@ function showRouteResultMobile(
   activeRoute: number,
   handleRouteClick: (index: number) => void,
   routeStarted: boolean = false,
-  handleStartRoute: (show: boolean) => void
+  handleStartRoute: (show: boolean) => void,
+  showDirections: boolean = false,
+  handleShowDirections: (show: boolean) => void,
+  handleSetNextTurnIndex: (index: number) => void
 ) {
+  const routeDirections = props.routeDataCRP![
+    activeRoute
+  ].driving_directions.reduce<CumulativeDirection[]>(
+    (acc, currentDirection) => {
+      const lastDirection = acc[acc.length - 1];
+      const cumulativeEta = lastDirection
+        ? lastDirection.cumulativeEta + currentDirection.travel_time
+        : currentDirection.travel_time;
+      const cumulativeDistance = lastDirection
+        ? lastDirection.cumulativeDistance + currentDirection.distance
+        : currentDirection.distance;
+
+      return [
+        ...acc,
+        {
+          ...currentDirection,
+          cumulativeEta,
+          cumulativeDistance,
+        },
+      ];
+    },
+    []
+  );
   return (
     <div
       className={`sm:hidden flex  flex-col  ${
@@ -152,84 +183,156 @@ function showRouteResultMobile(
  overflow-y-scroll  shadow-lg props.routeDataCRP`}
     >
       {!routeStarted ? (
-        <div className="flex flex-col py-2 flex-1">
-          <div className="flex flex-row gap-2 items-center">
-            <button
-              className={`flex  h-[20px] items-center rounded-md bg-purple-600 px-3 
+        showDirections ? (
+          <div className="flex flex-col py-2 flex-1 overflow-y-scroll">
+            <div className="flex flex-row pr-3 items-center justify-between pb-2">
+              <button
+                className={`flex  h-[20px] items-center rounded-md bg-purple-600 px-3 
             text-sm font-medium text-white transition-colors
              hover:bg-purple-400 focus-visible:outline 
                focus-visible:outline-offset-2 focus-visible:outline-purple-500 active:bg-purple-600 
                cursor-pointer aria-disabled:opacity-50  ml-2  py-3 `}
-              onClick={(e) => {
-                props.handleSetRouteDataCRP([]);
+                onClick={(e) => {
+                  handleShowDirections(false);
+                  props.handleDirectionActive(true);
+                }}
+              >
+                <IoIosArrowBack size={20} color="white" />
 
-                props.handleDirectionActive(false);
-              }}
-            >
-              <IoIosArrowBack size={20} color="white" />
-
-              <p> Back</p>
-            </button>
-            <p className="ml-2 text-left text-base text-[#666666] mt-2 mb-2">
-              Rute
-            </p>
-          </div>
-
-          {props.routeDataCRP &&
-            props.routeDataCRP.map((route, index) => (
+                <p> Back</p>
+              </button>
+              <button
+                className={`${
+                  haversineDistance(
+                    props.sourceLoc?.osm_object.lat!,
+                    props.sourceLoc?.osm_object.lon!,
+                    props.userLoc.latitude,
+                    props.userLoc.longitude
+                  ) < 0.15 // distance antara source point & gps location user < 150 meter
+                    ? "flex"
+                    : "hidden"
+                }  ml-8 h-[30px] items-center rounded-lg bg-blue-500 px-3
+                  text-sm font-mRouteedium text-white font-bold transition-colors
+                   hover:bg-blue-400 focus-visible:outline 
+                     focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
+                     cursor-pointer aria-disabled:opacity-50 space-x-2 gap-x-1`}
+                onClick={(e) => {
+                  handleStartRoute(true);
+                  props.handleDirectionActive(true);
+                }}
+              >
+                <AiOutlineThunderbolt size={18} color="white" />
+                Start Route{" "}
+              </button>
+            </div>
+            {routeDirections.map((direction, index) => (
               <div
                 key={`route-${index}`}
-                className={`flex flex-row items-center border-t-[1px] ${
-                  index == props.routeDataCRP!.length - 1
-                    ? "border-b-[1px]"
+                className={`flex flex-row gap-2 items-center border-t-[1px] ${
+                  index == routeDirections!.length - 1
+                    ? "border-b-[1px] mb-10"
                     : ""
-                }  border-[#D3DAE0] cursor-pointer group `}
+                }  border-[#D3DAE0] cursor-pointer group py2 `}
                 onClick={() => {
-                  handleRouteClick(index);
+                  handleSetNextTurnIndex(index);
                 }}
               >
                 <div
-                  className={`w-1  h-full mr-4 ${
-                    activeRoute == index && "bg-blue-500"
-                  }  group-hover:bg-[#B7BABF]`}
+                  className={`w-1  h-full mr-1 bg-blue-500 group-hover:bg-[#B7BABF]`}
                 ></div>
-                <div className="flex flex-col  py-2 gap-2  justify-start">
-                  <p className="text-xs font-semibold  ">
-                    <span className="text-lg font-bold">
-                      {Math.round(route.travel_time).toPrecision(2)} Menit
-                    </span>
-                    <span>&nbsp;&nbsp;&nbsp;</span>
-                    Tiba pada {getArrivalTime(route.travel_time)}{" "}
+                <Image
+                  src={getTurnIcon(direction.turn_type, "icons")}
+                  width={24}
+                  height={24}
+                  alt={`turn-${index}`}
+                  key={`turn-${index}`}
+                />
+                <div className="flex flex-col  py-4 gap-2  justify-start">
+                  <div className="flex flex-row items-center gap-2">
+                    <p className="text-base font-regular  ">
+                      {direction.instruction}
+                    </p>
+                  </div>
+                  <p className="text-sm font-light">
+                    {direction.cumulativeEta.toPrecision(2)} menit (
+                    {Math.round(direction.cumulativeDistance)} m)
                   </p>
-                  <p className="text-sm text-[#4C4C4C] ">{route.distance} KM</p>
                 </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col py-2 flex-1">
+            <div className="flex flex-row gap-2 items-center">
+              <button
+                className={`flex  h-[20px] items-center rounded-md bg-purple-600 px-3
+            text-sm font-medium text-white transition-colors
+             hover:bg-purple-400 focus-visible:outline 
+               focus-visible:outline-offset-2 focus-visible:outline-purple-500 active:bg-purple-600 
+               cursor-pointer aria-disabled:opacity-50  ml-2   py-3 `}
+                onClick={(e) => {
+                  props.handleSetRouteDataCRP([]);
 
-                <button
-                  className={`${
-                    haversineDistance(
-                      props.sourceLoc?.osm_object.lat!,
-                      props.sourceLoc?.osm_object.lon!,
-                      props.userLoc.latitude,
-                      props.userLoc.longitude
-                    ) < 0.15 // distance antara source point & gps location user < 150 meter
-                      ? "flex"
-                      : "hidden"
-                  } ml-8 h-[30px] items-center rounded-lg bg-blue-500 px-2 
-                  text-sm font-medium text-white transition-colors
+                  props.handleDirectionActive(false);
+                }}
+              >
+                <IoIosArrowBack size={20} color="white" />
+
+                <p> Back</p>
+              </button>
+              <p className="ml-2 text-left text-base text-[#0a0a0a] mt-2 mb-2">
+                Rute
+              </p>
+            </div>
+
+            {props.routeDataCRP &&
+              props.routeDataCRP.map((route, index) => (
+                <div
+                  key={`route-${index}`}
+                  className={`flex flex-row items-center border-t-[1px] ${
+                    index == props.routeDataCRP!.length - 1
+                      ? "border-b-[1px]"
+                      : ""
+                  }  border-[#D3DAE0] cursor-pointer group `}
+                  onClick={() => {
+                    handleRouteClick(index);
+                  }}
+                >
+                  <div
+                    className={`w-1  h-full mr-4 ${
+                      activeRoute == index && "bg-blue-500"
+                    }  group-hover:bg-[#B7BABF]`}
+                  ></div>
+                  <div className="flex flex-col  py-2 gap-2  justify-start">
+                    <p className="text-xs font-semibold  ">
+                      <span className="text-lg font-bold">
+                        {Math.round(route.travel_time).toPrecision(2)} Menit
+                      </span>
+                      <span>&nbsp;&nbsp;&nbsp;</span>
+                      Tiba pada {getArrivalTime(route.travel_time)}{" "}
+                    </p>
+                    <p className="text-sm text-[#4C4C4C] ">
+                      {route.distance} KM
+                    </p>
+                  </div>
+
+                  <button
+                    className={`flex ml-8 h-[30px] items-center rounded-lg bg-blue-500 px-2 
+                  text-sm font-mRouteedium text-white transition-colors
                    hover:bg-blue-400 focus-visible:outline 
                      focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                      cursor-pointer aria-disabled:opacity-50 space-x-2`}
-                  onClick={(e) => {
-                    handleStartRoute(true);
-                    props.handleDirectionActive(true);
-                  }}
-                >
-                  <p> Start Route</p>
-                  <FaLocationArrow size={20} color="white" />
-                </button>
-              </div>
-            ))}
-        </div>
+                    onClick={(e) => {
+                      handleShowDirections(true);
+                    }}
+                  >
+                    <p>Show Directions</p>
+                    <FaLocationArrow size={20} color="white" />
+                  </button>
+                </div>
+              ))}
+          </div>
+        )
       ) : (
         <div className="flex flex-row mt-6 items-center ">
           <div className="mr-4">
@@ -463,7 +566,7 @@ function showRouteDirectionsComponent(
 
   return (
     <div className="flex flex-col  py-2 flex-1 overflow-y-scroll">
-      <div className="flex flex-row gap-2 w-full">
+      <div className="flex flex-row gap-2 w-full ">
         <button
           className={`flex ml-1 mt-2 h-[20px] items-center rounded-md bg-purple-600 px-3 
                   text-sm font-medium text-white transition-colors

@@ -151,7 +151,7 @@ export default function Home() {
       const spRouteData = {
         travel_time: spCRPRouteData.data.travel_time,
         path: spCRPRouteData.data.path,
-        distance: parseFloat((spCRPRouteData.data.distance/1000).toFixed(2)),
+        distance: parseFloat((spCRPRouteData.data.distance / 1000).toFixed(2)),
         driving_directions: spCRPRouteData.data.driving_directions,
       };
 
@@ -272,6 +272,9 @@ export default function Home() {
         console.error("Geolocation not supported");
         return;
       }
+      toast.error(
+        "online map-matching and route start features are still in development"
+      );
       let currentGpsTraces: GPSTrace[] = [];
 
       const intervalId = setInterval(async () => {
