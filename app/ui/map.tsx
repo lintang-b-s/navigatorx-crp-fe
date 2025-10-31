@@ -147,24 +147,24 @@ export function MapComponent({
     }
   }, [nextTurnIndex]);
 
-  // useEffect(() => {
-  //   if (navigator.geolocation) {
-  //     navigator.geolocation.getCurrentPosition(
-  //       (position) => {
-  //         setViewState({
-  //           latitude: position.coords.latitude,
-  //           longitude: position.coords.longitude,
-  //           zoom: 15,
-  //         });
-  //       },
-  //       (error) => {
-  //         toast.error(error.message);
-  //       }
-  //     );
-  //   } else {
-  //     toast.error("Geolocation is not supported by this browser.");
-  //   }
-  // }, []);
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setViewState({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            zoom: 15,
+          });
+        },
+        (error) => {
+          toast.error(error.message);
+        }
+      );
+    } else {
+      toast.error("Geolocation is not supported by this browser.");
+    }
+  }, []);
 
   return (
     <Map
