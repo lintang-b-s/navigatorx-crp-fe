@@ -7,7 +7,12 @@ import { SearchResults } from "./searchResult";
 import { useEffect, useState } from "react";
 import { truncateString } from "../lib/util";
 
-export function SearchBox({ isSource, activate }: SearchBoxProps) {
+export function SearchBox({
+  isSource,
+  activate,
+  sourceLoc,
+  destinationLoc,
+}: SearchBoxProps) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { replace } = useRouter();
@@ -15,8 +20,24 @@ export function SearchBox({ isSource, activate }: SearchBoxProps) {
   const [term, setTerm] = useState(() => searchParams.get(paramName) ?? "");
 
   useEffect(() => {
-    setTerm(searchParams.get(paramName) ?? "");
-  }, [searchParams, paramName]);
+    if (sourceLoc != undefined && isSource) {
+      setTerm(
+        `${sourceLoc?.osm_object.name} ${
+          sourceLoc?.osm_object.address != ""
+            ? `, ${sourceLoc?.osm_object.address}`
+            : ""
+        }`
+      );
+    } else if (destinationLoc != undefined && !isSource) {
+      setTerm(
+        `${destinationLoc?.osm_object.name} ${
+          destinationLoc?.osm_object.address != ""
+            ? `, ${destinationLoc?.osm_object.address}`
+            : ""
+        }`
+      );
+    }
+  }, [sourceLoc, destinationLoc]);
 
   const handleSearch = useDebouncedCallback((currTerm, isSource) => {
     const params = new URLSearchParams(searchParams);
@@ -34,7 +55,7 @@ export function SearchBox({ isSource, activate }: SearchBoxProps) {
       }
     }
     replace(`${pathname}?${params.toString()}`);
-  }, 300);
+  }, 150);
 
   return (
     <div className="relative">

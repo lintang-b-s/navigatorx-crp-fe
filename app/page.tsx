@@ -8,11 +8,13 @@ import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { fetchReverseGeocoding, fetchSearch, Place } from "@/app/lib/searchApi";
 import toast from "react-hot-toast";
 import {
+  AlternativeRoutesResponse,
   Direction,
   fetchAlternativeRoutes,
   fetchRoute,
   fetchRouteCRP,
   RouteCRPResponse,
+  RouteCRPResponseWrapper,
   RouteResponse,
 } from "./lib/navigatorxApi";
 import polyline from "@mapbox/polyline";
@@ -55,6 +57,8 @@ export default function Home() {
   const [alternativeRoutesLineData, setAlternativeRoutesLineData] = useState<
     LineData[]
   >([]);
+  const [isAlternativeChecked, setIsAlternativeChecked] = useState(false);
+
   const [showResult, setShowResult] = useState(false);
   const [nextTurnIndex, setNextTurnIndex] = useState(-1);
   const pathname = usePathname();
@@ -117,6 +121,9 @@ export default function Home() {
     replace(`${pathname}?${p.toString()}`);
   };
 
+  const handleClickAlternativeCheckbox = () => {
+    setIsAlternativeChecked((prev) => !prev);
+  };
   const onSelectSource = (place: Place) => {
     setSourceLoc(place);
     pushParam("source", place);
@@ -141,28 +148,33 @@ export default function Home() {
     e.preventDefault();
 
     try {
+      setRouteData([]);
       const reqBody = {
         srcLat: sourceLoc?.osm_object.lat!,
         srcLon: sourceLoc?.osm_object.lon!,
         destLat: destinationLoc?.osm_object.lat!,
         destLon: destinationLoc?.osm_object.lon!,
       };
-      const spCRPRouteData = await fetchRouteCRP(reqBody);
-      const spRouteData = {
-        travel_time: spCRPRouteData.data.travel_time,
-        path: spCRPRouteData.data.path,
-        distance: parseFloat((spCRPRouteData.data.distance / 1000).toFixed(2)),
-        driving_directions: spCRPRouteData.data.driving_directions,
-      };
 
-      // const [spRouteData, alternativeRouteData] = await Promise.all([
-      //   fetchRoute(reqBody),
-      //   fetchAlternativeRoutes(reqBody),
-      // ]);
+      let alternativeRouteData: AlternativeRoutesResponse | undefined =
+        undefined;
+      let spRouteData: RouteCRPResponseWrapper | undefined = undefined;
+      if (isAlternativeChecked) {
+        [spRouteData, alternativeRouteData] = await Promise.all([
+          fetchRouteCRP(reqBody),
+          fetchAlternativeRoutes(reqBody),
+        ]);
+      } else {
+        [spRouteData] = await Promise.all([fetchRouteCRP(reqBody)]);
+      }
+
+      spRouteData.data.distance = parseFloat(
+        (spRouteData.data.distance / 1000).toFixed(2)
+      );
 
       setActiveRoute(0);
 
-      const coords = polyline.decode(spRouteData.path);
+      const coords = polyline.decode(spRouteData.data.path);
       const linedata: LineData = {
         type: "Feature",
         geometry: {
@@ -173,34 +185,44 @@ export default function Home() {
 
       setPolylineData(linedata);
 
-      const dummyRoute: LineData = {
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [
-            [-100, 40],
-            [-100, 40],
-          ],
-        },
-      };
+      if (
+        alternativeRouteData &&
+        alternativeRouteData.data.alternative_routes != null &&
+        alternativeRouteData.data.alternative_routes.length > 0
+      ) {
+        alternativeRouteData.data.alternative_routes.map((alt) => {
+          alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
+        });
+        const dummyRoute: LineData = {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [-100, 40],
+              [-100, 40],
+            ],
+          },
+        };
 
-      // const alternativesPolyline = alternativeRouteData.routes
-      //   .slice(1)
-      //   .map((route) => {
-      //     const coords = polyline.decode(route.path);
-      //     return {
-      //       type: "Feature",
-      //       geometry: {
-      //         type: "LineString",
-      //         coordinates: coords.map((coord) => [coord[1], coord[0]]),
-      //       },
-      //     };
-      //   });
-      // setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
-      // setAlternativeRoutesLineData([dummyRoute]);
-      setRouteData([spRouteData]);
-
-      // setRouteData([spRouteData, ...alternativeRouteData.routes.slice(1)]);
+        const alternativesPolyline =
+          alternativeRouteData.data.alternative_routes.map((route) => {
+            const coords = polyline.decode(route.path);
+            return {
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: coords.map((coord) => [coord[1], coord[0]]),
+              },
+            };
+          });
+        setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
+        setRouteData([
+          spRouteData.data,
+          ...alternativeRouteData.data.alternative_routes,
+        ]);
+      } else {
+        setRouteData([spRouteData.data]);
+      }
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -486,8 +508,11 @@ export default function Home() {
         distanceFromNextTurnPoint={distanceFromNextTurnPoint}
         currentDirectionIndex={currentDirectionIndex}
         sourceLoc={sourceLoc}
+        destinationLoc={destinationLoc}
         userLoc={userLoc}
         handleSetRouteDataCRP={handleSetRouteDataCRP}
+        handleIsAlternativeChecked={handleClickAlternativeCheckbox}
+        isAlternativeChecked={isAlternativeChecked}
       />
 
       {showResult && isSourceFocused && (

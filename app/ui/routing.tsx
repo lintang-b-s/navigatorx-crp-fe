@@ -26,6 +26,7 @@ import { FaCheck } from "react-icons/fa";
 export function Router(props: RouterProps) {
   const [isSourceFocused, setIsSourceFocused] = useState(false);
   const [showDirections, setShowDirections] = useState(false);
+
   const [nowTime, setNowTime] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNowTime(new Date()), 5000);
@@ -86,11 +87,11 @@ export function Router(props: RouterProps) {
             !props.isDestinationFocused
               ? "hidden"
               : "block"
-          } flex flex-col  h-[180px] w-[92vw] sm:h-[200px] sm:w-[440px]  
-       items-center  absolute top-4 left-1/2 -translate-x-1/2 sm:translate-x-0  md:left-10 bg-white
-        rounded-lg overflow-hidden shadow-lg props.routeDataCRP`}
+          } flex flex-col  h-[180px] w-[94vw] sm:h-[200px] sm:w-[460px]  
+        absolute top-4 left-1/2 -translate-x-1/2 sm:translate-x-0  md:left-10 bg-white
+        rounded-lg overflow-hidden shadow-lg  `}
         >
-          <div className="flex flex-row items-center gap-2 pt-8 px-4 ">
+          <div className="flex flex-row  items-center gap-2 pt-8 pl-4  ">
             <div className="flex flex-col gap-1 items-center ">
               <LiaSourcetree
                 className="w-[20px] h-[20px] md:w-[25px] md:h-[25px] "
@@ -107,16 +108,44 @@ export function Router(props: RouterProps) {
             </div>
 
             <div className="flex flex-col gap-4 items-start justify-center">
-              <SearchBox isSource={true} activate={props.sourceSearchActive} />
+              <SearchBox
+                isSource={true}
+                activate={props.sourceSearchActive}
+                sourceLoc={props.sourceLoc}
+                destinationLoc={props.destinationLoc}
+              />
               <SearchBox
                 isSource={false}
                 activate={props.destinationSearchActive}
+                sourceLoc={props.sourceLoc}
+                destinationLoc={props.destinationLoc}
               />
             </div>
 
-            <Button onClick={(e) => props.onHandleGetRoutes(e)}>
-              <CiRoute size={30} />
-            </Button>
+            <div className="flex flex-col items-center gap-2  ">
+              <Button className="" onClick={(e) => props.onHandleGetRoutes(e)}>
+                <CiRoute size={30} />
+              </Button>
+
+              <label
+                className="flex flex-row items-center ml-1 cursor-pointer select-none"
+                onClick={() => props.handleIsAlternativeChecked()}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 
+                ${
+                  props.isAlternativeChecked
+                    ? "border-blue-500 bg-blue-500"
+                    : "border-gray-400 bg-white"
+                }`}
+                >
+                  {props.isAlternativeChecked && (
+                    <FaCheck size={13} color="white" />
+                  )}
+                </div>
+                <p className="ml-2 text-sm text-[#666f74]">alternatives</p>
+              </label>
+            </div>
           </div>
 
           <button
@@ -294,7 +323,7 @@ function showRouteResultMobile(
                       ? "border-b-[1px]"
                       : ""
                   }  border-[#D3DAE0] cursor-pointer group `}
-                  onClick={() => {
+                  onClick={() => { 
                     handleRouteClick(index);
                   }}
                 >
@@ -317,11 +346,11 @@ function showRouteResultMobile(
                   </div>
 
                   <button
-                    className={`flex ml-8 py-1 items-center rounded-lg bg-blue-500 px-2 
+                    className={`flex ml-4 py-1 items-center rounded-lg bg-blue-500 px-2 
                   text-sm font-mRouteedium text-white transition-colors
                    hover:bg-blue-400 focus-visible:outline 
                      focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
-                     cursor-pointer aria-disabled:opacity-50 space-x-2`}
+                     cursor-pointer aria-disabled:opacity-50 space-x-2 mr-2`}
                     onClick={(e) => {
                       handleShowDirections(true);
                     }}
@@ -430,7 +459,7 @@ function showRouteResult(
 ) {
   return (
     <div
-      className={`hidden sm:flex  sm:flex-col  h-[150px] w-[355px] sm:h-full sm:w-[400px]  
+      className={`hidden sm:flex  sm:flex-col  h-[150px] w-[355px] sm:h-full sm:w-[444px]  
    absolute top-0 md:left-0 bg-white
   rounded-lg overflow-hidden  shadow-lg props.routeDataCRP`}
     >
@@ -462,9 +491,30 @@ function showRouteResult(
             />
           </div>
 
-          <Button onClick={(e) => props.onHandleGetRoutes(e)}>
-            <CiRoute size={30} />
-          </Button>
+          <div className="flex flex-col items-center gap-2  ">
+            <Button className="" onClick={(e) => props.onHandleGetRoutes(e)}>
+              <CiRoute size={30} />
+            </Button>
+
+            <label
+              className="flex flex-row items-center ml-1 cursor-pointer select-none"
+              onClick={() => props.handleIsAlternativeChecked()}
+            >
+              <div
+                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 
+                ${
+                  props.isAlternativeChecked
+                    ? "border-blue-500 bg-blue-500"
+                    : "border-gray-400 bg-white"
+                }`}
+              >
+                {props.isAlternativeChecked && (
+                  <FaCheck size={13} color="white" />
+                )}
+              </div>
+              <p className="ml-2 text-sm text-[#666f74]">alternatives</p>
+            </label>
+          </div>
         </div>
       </div>
 

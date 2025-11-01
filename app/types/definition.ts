@@ -5,6 +5,8 @@ import { RouteCRPResponse, RouteResponse } from "../lib/navigatorxApi";
 export type SearchBoxProps = {
   isSource: boolean;
   activate: (val: boolean) => void;
+  sourceLoc?: Place;
+  destinationLoc?: Place;
 };
 
 export type RouterProps = {
@@ -26,8 +28,11 @@ export type RouterProps = {
   currentDirectionIndex: number;
   userLoc: UserLocation;
   sourceLoc?: Place;
+  destinationLoc?: Place;
   handleSetRouteData?: (routeData: RouteResponse[]) => void;
   handleSetRouteDataCRP: (routeData: RouteCRPResponse[]) => void;
+  isAlternativeChecked: boolean;
+  handleIsAlternativeChecked: () => void;
 };
 
 export type SearchSelectorProps = {

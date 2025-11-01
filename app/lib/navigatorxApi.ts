@@ -48,7 +48,9 @@ export interface RouteRequest {
 }
 
 export interface AlternativeRoutesResponse {
-  routes: RouteResponse[];
+  data: {
+    alternative_routes: RouteCRPResponse[];
+  };
 }
 // for https://github.com/lintang-b-s/navigatorX-CH
 export const fetchRoute = async ({
@@ -78,7 +80,7 @@ export const fetchRouteCRP = async ({
 }: RouteRequest): Promise<RouteCRPResponseWrapper> => {
   try {
     const { data } = await axios.get(
-      `https://www.navigatorx.lintangbs.my.id/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
+      `http://localhost:6060/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
       {}
     );
 
@@ -96,7 +98,7 @@ export const fetchAlternativeRoutes = async ({
 }: RouteRequest): Promise<AlternativeRoutesResponse> => {
   try {
     const { data } = await axios.get(
-      `http://localhost:5000/api/navigations/shortest-path-alternative-routes?src_lat=${srcLat}&src_lon=${srcLon}&dst_lat=${destLat}&dst_lon=${destLon}`,
+      `http://localhost:6060/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2`,
       {}
     );
 

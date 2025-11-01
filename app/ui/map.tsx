@@ -90,13 +90,10 @@ export function MapComponent({
         let zoomLevel = 15;
         if (
           routeDataCRP![activeRoute].distance > 7 &&
-          routeDataCRP![activeRoute].distance < 15
+          routeDataCRP![activeRoute].distance < 50
         ) {
           zoomLevel = 12;
-        } else if (
-          routeDataCRP![activeRoute].distance > 15 &&
-          routeDataCRP![activeRoute].distance < 70
-        ) {
+        } else if (routeDataCRP![activeRoute].distance > 50) {
           zoomLevel = 10;
         }
         const midIndex = Math.floor(
@@ -113,12 +110,17 @@ export function MapComponent({
       }
     } else if (lineData && routeDataCRP?.length! > 0) {
       let zoomLevel = 15;
+      console.log("tes1", routeDataCRP![0].distance);
       if (routeDataCRP![0].distance > 7 && routeDataCRP![0].distance < 15) {
+        console.log("tes2");
         zoomLevel = 12;
       } else if (
         routeDataCRP![0].distance > 15 &&
-        routeDataCRP![0].distance < 70
+        routeDataCRP![0].distance < 50
       ) {
+        console.log("tes3");
+        zoomLevel = 11;
+      } else if (routeDataCRP![0].distance > 50) {
         zoomLevel = 10;
       }
       const midIndex = Math.floor(lineData!.geometry.coordinates.length / 2);
@@ -146,25 +148,6 @@ export function MapComponent({
       });
     }
   }, [nextTurnIndex]);
-
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setViewState({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            zoom: 15,
-          });
-        },
-        (error) => {
-          toast.error(error.message);
-        }
-      );
-    } else {
-      toast.error("Geolocation is not supported by this browser.");
-    }
-  }, []);
 
   return (
     <Map
@@ -197,6 +180,12 @@ export function MapComponent({
                 e.coords.latitude,
                 e.coords.longitude
               );
+              setViewState((prev) => ({
+                ...prev,
+                latitude: e.coords.latitude,
+                longitude: e.coords.longitude,
+                zoom: 17,
+              }));
             }}
             showAccuracyCircle={!routeStarted}
             showUserLocation={!routeStarted}
