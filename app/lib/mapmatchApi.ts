@@ -1,11 +1,42 @@
 // https://navigatorx.lintangbs.my.id/mapmatch/api/map-match/map-matching
 
 import axios from "axios";
-import { GPSTrace } from "../types/definition";
 
 export interface Coord {
   lat: number;
   lon: number;
+}
+
+export interface Candidate {
+  edge_id: number;
+  weight: number;
+  length: number;
+}
+
+export interface Gps {
+  lon: number;
+  lat: number;
+  time: Date;
+  speed: number;
+  delta_time: number;
+  dead_reckoning: boolean;
+}
+
+export interface MatchedGpsPoint {
+  gps_point: Gps;
+  edge_id: number;
+  matched_coord: Coord;
+  predicted_gps_coord: Coord;
+  edge_initial_bearing: number;
+}
+
+export interface MapMatchRequest {
+  gps_point: Gps;
+  k: number;
+  candidates: Candidate[];
+  speed_mean_k: number;
+  speed_std_k: number;
+  last_bearing: number;
 }
 
 export interface Observation {
@@ -14,20 +45,22 @@ export interface Observation {
 }
 
 export interface MapMatchResponse {
-  path: string;
-  projection_coordinates: Coord[];
-  observations: Observation[];
+  data: {
+    matched_gps_point: MatchedGpsPoint;
+    candidates: Candidate[];
+    speed_mean_k: number;
+    speed_std_k: number;
+    edge_initial_bearing: number;
+  };
 }
 
 export const fetchMapMatch = async (
-  latlons: GPSTrace[]
+  request: MapMatchRequest
 ): Promise<MapMatchResponse> => {
   try {
     const { data } = await axios.post(
-      `https://navigatorx.lintangbs.my.id/mapmatch/api/map-match/map-matching`,
-      {
-        coordinates: latlons,
-      }
+      `https://navigatorx.lintangbs.my.id/api/onlineMapMatch`,
+      request
     );
 
     return data;

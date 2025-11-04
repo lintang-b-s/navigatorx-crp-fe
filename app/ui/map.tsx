@@ -31,7 +31,7 @@ export function MapComponent({
   nextTurnIndex,
   onSelectSource,
   onSelectDestination,
-  snappedGPSLoc,
+  matchedGpsLoc,
   routeStarted,
   gpsHeading,
 }: MapComponentProps) {
@@ -60,15 +60,15 @@ export function MapComponent({
   }
 
   useEffect(() => {
-    // if (routeStarted && snappedGPSLoc) {
-    //   // update view state to user current snapped gps location
-    //   setViewState({
-    //     longitude: snappedGPSLoc!.lon,
-    //     latitude: snappedGPSLoc!.lat,
-    //     zoom: 16,
-    //   });
-    //   return;
-    // }
+    if (routeStarted && matchedGpsLoc) {
+      // update view state to user current matched gps location
+      setViewState({
+        longitude: matchedGpsLoc!.lon,
+        latitude: matchedGpsLoc!.lat,
+        zoom: 16,
+      });
+      return;
+    }
     if (isDirectionActive) {
       if (activeRoute == 0) {
         let zoomLevel = 15;
@@ -135,7 +135,7 @@ export function MapComponent({
     lineData,
     alternativeRoutes,
     routeStarted,
-    snappedGPSLoc,
+    matchedGpsLoc,
   ]);
 
   useEffect(() => {
@@ -359,10 +359,10 @@ export function MapComponent({
         </>
       )}
 
-      {routeStarted && snappedGPSLoc && (
+      {routeStarted && matchedGpsLoc && (
         <Marker
-          latitude={snappedGPSLoc.lat}
-          longitude={snappedGPSLoc.lon}
+          latitude={matchedGpsLoc.lat}
+          longitude={matchedGpsLoc.lon}
           rotation={gpsHeading - userRouteMarkerDegree}
           anchor="center"
         >

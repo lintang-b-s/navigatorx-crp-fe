@@ -1,15 +1,13 @@
-import { GPSTrace } from "../types/definition";
-import { Direction, RouteCRPResponse, RouteResponse } from "./navigatorxApi";
+import { Coord, Gps } from "./mapmatchApi";
+import { Direction, RouteCRPResponse } from "./navigatorxApi";
 import { haversineDistance } from "./util";
 
 export function isUserOffTheRoute({
   snappedEdgeID,
-  snappedGPSLoc,
   routeData,
 }: {
   snappedEdgeID: number;
-  snappedGPSLoc: GPSTrace;
-  routeData: RouteResponse;
+  routeData: RouteCRPResponse;
 }): boolean {
   let isOffRoute = true;
   for (let i = 0; i < routeData.driving_directions.length; i++) {
@@ -30,15 +28,11 @@ export function isUserOffTheRoute({
   return true;
 }
 
-
-
 export function getCurrentUserDirectionIndex({
   snappedEdgeID,
-  snappedGPSLoc,
   drivingDirections,
 }: {
   snappedEdgeID: number;
-  snappedGPSLoc: GPSTrace;
   drivingDirections: Direction[];
 }): number {
   let directionIndex = 1;
@@ -57,18 +51,18 @@ export function getCurrentUserDirectionIndex({
 }
 
 export function getDistanceFromUserToNextTurn({
-  snappedGPSLoc,
+  matchedGpsLoc,
   nextTurnPoint,
 }: {
-  snappedGPSLoc: GPSTrace;
+  matchedGpsLoc: Coord;
   nextTurnPoint: {
     lat: number;
     lon: number;
   };
 }): number {
   return haversineDistance(
-    snappedGPSLoc.lat,
-    snappedGPSLoc.lon,
+    matchedGpsLoc.lat,
+    matchedGpsLoc.lon,
     nextTurnPoint.lat,
     nextTurnPoint.lon
   );

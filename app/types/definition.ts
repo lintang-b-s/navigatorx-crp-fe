@@ -1,6 +1,7 @@
 import { Dispatch, MouseEvent, RefObject, SetStateAction } from "react";
 import { Place } from "../lib/searchApi";
 import { RouteCRPResponse, RouteResponse } from "../lib/navigatorxApi";
+import { Coord, Gps } from "../lib/mapmatchApi";
 
 export type SearchBoxProps = {
   isSource: boolean;
@@ -50,7 +51,7 @@ export type MapComponentProps = {
   nextTurnIndex: number;
   onSelectSource: (place: Place) => void;
   onSelectDestination: (place: Place) => void;
-  snappedGPSLoc: GPSTrace | undefined;
+  matchedGpsLoc: Coord | undefined;
   routeStarted: boolean;
   gpsHeading: number;
 };
@@ -61,9 +62,4 @@ export type LineData = {
     type: string;
     coordinates: number[][];
   };
-};
-
-export type GPSTrace = {
-  lat: number;
-  lon: number;
 };
