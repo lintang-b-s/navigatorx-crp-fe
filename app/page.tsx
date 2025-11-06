@@ -3,7 +3,7 @@ import Image from "next/image";
 import { MapComponent } from "@/app/ui/map";
 import { Router } from "@/app/ui/routing";
 import { SearchResults } from "./ui/searchResult";
-import { MouseEvent, Suspense, useEffect, useState } from "react";
+import { MouseEvent, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { fetchReverseGeocoding, fetchSearch, Place } from "@/app/lib/searchApi";
 import toast from "react-hot-toast";
@@ -43,7 +43,6 @@ export default function Home() {
   const [distanceFromNextTurnPoint, setDistanceFromNextTurnPoint] =
     useState<number>(0); // in meter
   const [currentDirectionIndex, setCurrentDirectionIndex] = useState(1);
-  const [prevGps, setPrevGps] = useState<Gps>();
 
   // search states
   const searchParams = useSearchParams();
@@ -72,12 +71,13 @@ export default function Home() {
     longitude: -100,
     latitude: 40,
   });
-  const [speedMeanK, SetSpeedMeanK] = useState<number>(500.0);
-  const [speedStdK, setSpeedStdK] = useState<number>(500.0);
-  const [lastBearing, setLastBearing] = useState<number>(0.0);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [prevMatchedGpsLoc, setPrevMatchedGpsLoc] = useState<Gps>();
-  const [mapMatchStep, SetMapMatchStep] = useState<number>(0);
+
+  const candidates = useRef<Candidate[]>([]);
+  const speedMeanK = useRef<number>(500.0);
+  const speedStdK = useRef<number>(500.0);
+  const lastBearing = useRef<number>(0.0);
+  const prevMatchedGpsLoc = useRef<Gps>(undefined);
+  const mapMatchStep = useRef<number>(1);
 
   const { replace } = useRouter();
   // search useffect
@@ -299,7 +299,7 @@ export default function Home() {
     setRouteStarted(start);
   };
 
-  const mapMatchSamplingInterval = 30; // 30ms
+  const mapMatchSamplingInterval = 80; // 80ms
   // route started useffect
   useEffect(() => {
     if (routeStarted) {
@@ -330,10 +330,11 @@ export default function Home() {
         try {
           const resp = JSON.parse(event.data);
 
-          setCandidates(resp.data.candidates);
-          SetSpeedMeanK(resp.data.speed_mean_k);
-          setSpeedStdK(resp.data.speed_std_k);
-          setLastBearing(resp.data.edge_initial_bearing);
+          candidates.current = resp.data.candidates;
+          speedMeanK.current = resp.data.speed_mean_k;
+          speedStdK.current = resp.data.speed_std_k;
+          lastBearing.current = resp.data.edge_initial_bearing;
+
           setMatchedGpsLoc(resp.data.matched_gps_point.matched_coord);
           setSnappedEdgeID(resp.data.matched_gps_point.edge_id);
         } catch (err) {
@@ -341,49 +342,56 @@ export default function Home() {
         }
       };
 
-      SetMapMatchStep((prev) => prev + 1);
-
       const intervalId = setInterval(async () => {
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
             let currentTime: Date = new Date();
             let deltaTime: number = 0;
-            if (mapMatchStep > 1) {
+            if (mapMatchStep.current > 1) {
               deltaTime =
                 (currentTime.getTime() -
-                  (prevMatchedGpsLoc?.time?.getTime() ?? 0)) /
+                  (prevMatchedGpsLoc.current?.time?.getTime() ?? 0)) /
                 60000.0;
             }
-
+            console.log("sample");
+            if (
+              haversineDistance(
+                pos.coords.latitude,
+                pos.coords.longitude,
+                prevMatchedGpsLoc.current?.lat!,
+                prevMatchedGpsLoc.current?.lon!
+              ) < 0.002 // kurang dari 2 meter
+            ) {
+              return;
+            }
             currentGps = {
               lat: pos.coords.latitude,
               lon: pos.coords.longitude,
-              speed: speedMeanK,
-              delta_time: mapMatchStep == 1 ? 0 : deltaTime,
+              speed: speedMeanK.current,
+              delta_time: mapMatchStep.current == 1 ? 0 : deltaTime,
               time: currentTime,
               dead_reckoning: false,
             };
 
             let mapMatchRequest: MapMatchRequest = {
               gps_point: currentGps,
-              k: mapMatchStep,
-              candidates: candidates,
-              speed_mean_k: speedMeanK,
-              speed_std_k: speedStdK,
-              last_bearing: lastBearing,
+              k: mapMatchStep.current,
+              candidates: candidates.current,
+              speed_mean_k: speedMeanK.current,
+              speed_std_k: speedStdK.current,
+              last_bearing: lastBearing.current,
             };
 
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify(mapMatchRequest));
             }
 
+            mapMatchStep.current += 1;
             setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
-            setPrevGps(currentGps);
-            setPrevMatchedGpsLoc(currentGps);
+
+            prevMatchedGpsLoc.current = currentGps;
           },
-          (err) => {
-            setPrevGps(undefined);
-          },
+          (err) => {},
           {
             enableHighAccuracy: true,
             maximumAge: 0,
@@ -399,11 +407,12 @@ export default function Home() {
         }
       };
     } else {
-      SetMapMatchStep(0);
-      setCandidates([]);
-      SetSpeedMeanK(500.0);
-      setSpeedStdK(500.0);
-      setLastBearing(0.0);
+      mapMatchStep.current = 0;
+      candidates.current = [];
+      speedMeanK.current = 500.0;
+      speedStdK.current = 500.0;
+      lastBearing.current = 0.0;
+
       setMatchedGpsLoc(undefined);
       setSnappedEdgeID(0);
     }
@@ -432,7 +441,7 @@ export default function Home() {
 
     // const firstRouteEdgeID = usedRoute?.driving_directions[0].edge_ids[0];
     const firstRouteEdgeID = 0;
-    if (snappedEdgeID == firstRouteEdgeID || mapMatchStep == 1) {
+    if (snappedEdgeID == firstRouteEdgeID || mapMatchStep.current == 1) {
       // skip re-route logic if current user location == source loc.
       return;
     }
