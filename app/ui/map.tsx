@@ -110,15 +110,12 @@ export function MapComponent({
       }
     } else if (lineData && routeDataCRP?.length! > 0) {
       let zoomLevel = 15;
-      console.log("tes1", routeDataCRP![0].distance);
       if (routeDataCRP![0].distance > 7 && routeDataCRP![0].distance < 15) {
-        console.log("tes2");
         zoomLevel = 12;
       } else if (
         routeDataCRP![0].distance > 15 &&
         routeDataCRP![0].distance < 50
       ) {
-        console.log("tes3");
         zoomLevel = 11;
       } else if (routeDataCRP![0].distance > 50) {
         zoomLevel = 10;
@@ -303,8 +300,7 @@ export function MapComponent({
         routeDataCRP &&
         routeDataCRP[activeRoute].driving_directions.map((turn, i) => {
           const turnIcon = getTurnIconDirection(turn.turn_type);
-          console.log("turn: ", turn);
-          console.log("turnIcon: ", turnIcon);
+
           if (turnIcon == "") {
             return null;
           }

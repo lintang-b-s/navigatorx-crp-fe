@@ -299,7 +299,7 @@ export default function Home() {
     setRouteStarted(start);
   };
 
-  const mapMatchSamplingInterval = 100; // 100ms
+  const mapMatchSamplingInterval = 30; // 30ms
   // route started useffect
   useEffect(() => {
     if (routeStarted) {
@@ -309,6 +309,37 @@ export default function Home() {
       }
 
       let currentGps: Gps;
+      const ws = new WebSocket("wss://navigatorx.lintangbs.my.id/ws");
+
+      ws.onerror = (error) => {
+        toast.error("WebSocket connection error");
+        console.log(error);
+      };
+
+      ws.onclose = (event) => {
+        console.warn("WebSocket closed:", {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+        });
+
+        toast.error(`WebSocket closed (code: ${event.code})`);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const resp = JSON.parse(event.data);
+
+          setCandidates(resp.data.candidates);
+          SetSpeedMeanK(resp.data.speed_mean_k);
+          setSpeedStdK(resp.data.speed_std_k);
+          setLastBearing(resp.data.edge_initial_bearing);
+          setMatchedGpsLoc(resp.data.matched_gps_point.matched_coord);
+          setSnappedEdgeID(resp.data.matched_gps_point.edge_id);
+        } catch (err) {
+          toast.error("Failed to parse WebSocket message");
+        }
+      };
 
       SetMapMatchStep((prev) => prev + 1);
 
@@ -342,23 +373,13 @@ export default function Home() {
               last_bearing: lastBearing,
             };
 
-            try {
-              const resp = await fetchMapMatch(mapMatchRequest);
-              console.log("resp: ", resp);
-              setCandidates(resp.data.candidates);
-              SetSpeedMeanK(resp.data.speed_mean_k);
-              setSpeedStdK(resp.data.speed_std_k);
-              setLastBearing(resp.data.edge_initial_bearing);
-              setMatchedGpsLoc(resp.data.matched_gps_point.matched_coord);
-              setSnappedEdgeID(resp.data.matched_gps_point.edge_id);
-
-              setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
-              setPrevGps(currentGps);
-              setPrevMatchedGpsLoc(currentGps);
-            } catch (e: any) {
-              console.log("Failed to fetch map match: ", e);
-              toast.error("Failed to fetch map match: ", e);
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify(mapMatchRequest));
             }
+
+            setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
+            setPrevGps(currentGps);
+            setPrevMatchedGpsLoc(currentGps);
           },
           (err) => {
             setPrevGps(undefined);
@@ -373,6 +394,9 @@ export default function Home() {
 
       return () => {
         clearInterval(intervalId);
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close(1000, "");
+        }
       };
     } else {
       SetMapMatchStep(0);
