@@ -338,8 +338,13 @@ export default function Home() {
     setRouteStarted(start);
   };
 
-  const normalizeHeading = (angle: number) => ((angle % 360) + 360) % 360;
-  let compassHeading = 0;
+  useEffect(() => {
+    if (orientation?.alpha != null) {
+      // buat debug di hp
+      toast.success("orientation.alpha: " + orientation.alpha);
+      setGpsHeading(orientation?.alpha!);
+    }
+  }, [orientation]);
 
   const defaultConstantSpeed = 500.0; // meter/min
 
@@ -409,13 +414,9 @@ export default function Home() {
           let deltaTime: number = 0;
           let speed = 0.0;
 
-          if (orientation?.alpha != null) {
-            // buat debug di hp 
-            toast.success("orientation.alpha: " + orientation.alpha);
-            setGpsHeading(orientation?.alpha!);
-          } else {
+          if (orientation?.alpha == null) {
+            // buat debug di hp
             toast.success("pos.coords.heading: " + pos.coords.heading);
-
             setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
           }
 
@@ -435,7 +436,6 @@ export default function Home() {
               speed = distance / deltaTime; // meter/minute
             }
           }
-
 
           currentGps = {
             lat: pos.coords.latitude,
