@@ -85,8 +85,18 @@ export const fetchRouteCRP = async ({
     );
 
     return data;
-  } catch (error) {
-    throw new Error("Failed to fetch search results");
+  } catch (error: any) {
+    if (error.response) {
+      if (error.response.status === 502) {
+        throw new Error("navigatorx routing engine sedang ada perbaikan");
+      } else {
+        throw new Error(
+          `Server error (${error.response.status}): ${error.response.statusText}`
+        );
+      }
+    } else {
+      throw new Error("fetch route error");
+    }
   }
 };
 

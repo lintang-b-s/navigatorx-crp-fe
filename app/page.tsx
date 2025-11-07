@@ -275,6 +275,7 @@ export default function Home() {
         setRouteData([spRouteData.data]);
       }
     } catch (error: any) {
+    
       toast.error(error.message);
     }
   };
