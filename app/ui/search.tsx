@@ -12,6 +12,8 @@ export function SearchBox({
   activate,
   sourceLoc,
   destinationLoc,
+  onSelectSource,
+  onSelectDestination,
 }: SearchBoxProps) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -38,6 +40,18 @@ export function SearchBox({
       );
     }
   }, [sourceLoc, destinationLoc]);
+
+  const parseCoordinates = (input: string) => {
+    const coordRegex =
+      /^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/;
+    if (coordRegex.test(input)) {
+      const [lat, lon] = input.split(",").map((v) => parseFloat(v.trim()));
+      if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        return { lat, lon };
+      }
+    }
+    return null;
+  };
 
   const handleSearch = useDebouncedCallback((currTerm, isSource) => {
     const params = new URLSearchParams(searchParams);
@@ -67,6 +81,34 @@ export function SearchBox({
         onChange={(e) => {
           setTerm(e.target.value);
           handleSearch(e.target.value, isSource);
+          const coords = parseCoordinates(e.target.value);
+          if (coords) {
+            if (isSource) {
+              onSelectSource({
+                osm_object: {
+                  id: 0,
+                  name: `${coords.lat}, ${coords.lon}`,
+                  lat: coords.lat,
+                  lon: coords.lon,
+                  type: "source",
+                  address: "",
+                },
+                distance: 0,
+              });
+            } else if (!isSource) {
+              onSelectDestination({
+                osm_object: {
+                  id: 0,
+                  name: `${coords.lat}, ${coords.lon}`,
+                  lat: coords.lat,
+                  lon: coords.lon,
+                  type: "source",
+                  address: "",
+                },
+                distance: 0,
+              });
+            }
+          }
         }}
         value={term}
         onFocus={() => {

@@ -8,6 +8,8 @@ export type SearchBoxProps = {
   activate: (val: boolean) => void;
   sourceLoc?: Place;
   destinationLoc?: Place;
+  onSelectSource: (place: Place) => void;
+  onSelectDestination: (place: Place) => void;
 };
 
 export type RouterProps = {
@@ -34,6 +36,8 @@ export type RouterProps = {
   handleSetRouteDataCRP: (routeData: RouteCRPResponse[]) => void;
   isAlternativeChecked: boolean;
   handleIsAlternativeChecked: () => void;
+  onSelectSource: (place: Place) => void;
+  onSelectDestination: (place: Place) => void;
 };
 
 export type SearchSelectorProps = {

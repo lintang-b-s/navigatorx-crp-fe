@@ -113,12 +113,16 @@ export function Router(props: RouterProps) {
                 activate={props.sourceSearchActive}
                 sourceLoc={props.sourceLoc}
                 destinationLoc={props.destinationLoc}
+                onSelectSource={props.onSelectSource}
+                onSelectDestination={props.onSelectDestination}
               />
               <SearchBox
                 isSource={false}
                 activate={props.destinationSearchActive}
                 sourceLoc={props.sourceLoc}
                 destinationLoc={props.destinationLoc}
+                onSelectSource={props.onSelectSource}
+                onSelectDestination={props.onSelectDestination}
               />
             </div>
 
@@ -482,10 +486,17 @@ function showRouteResult(
           </div>
 
           <div className="flex flex-col gap-4 items-start justify-center">
-            <SearchBox isSource={true} activate={props.sourceSearchActive} />
+            <SearchBox
+              isSource={true}
+              activate={props.sourceSearchActive}
+              onSelectSource={props.onSelectSource}
+              onSelectDestination={props.onSelectDestination}
+            />
             <SearchBox
               isSource={false}
               activate={props.destinationSearchActive}
+              onSelectSource={props.onSelectSource}
+              onSelectDestination={props.onSelectDestination}
             />
           </div>
 
