@@ -340,8 +340,6 @@ export default function Home() {
 
   useEffect(() => {
     if (orientation?.alpha != null) {
-      // buat debug di hp
-      toast.success("orientation.alpha: " + orientation.alpha);
       setGpsHeading(orientation?.alpha!);
     }
   }, [orientation]);
@@ -416,7 +414,6 @@ export default function Home() {
 
           if (orientation?.alpha == null) {
             // buat debug di hp
-            toast.success("pos.coords.heading: " + pos.coords.heading);
             setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
           }
 
