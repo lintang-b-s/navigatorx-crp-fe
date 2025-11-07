@@ -341,7 +341,7 @@ export default function Home() {
 
   useEffect(() => {
     if (orientation?.alpha != null) {
-      setGpsHeading(orientation?.alpha!);
+      setGpsHeading(360.0 - orientation?.alpha!);
     }
   }, [orientation]);
 
