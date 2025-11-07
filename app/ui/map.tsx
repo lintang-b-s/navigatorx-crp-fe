@@ -149,7 +149,7 @@ export function MapComponent({
   return (
     <Map
       {...viewState}
-      bearing={gpsHeading}
+      bearing={routeStarted ? gpsHeading : 0}
       style={{ width: "100vw", height: "100vh" }}
       onMove={(evt) => setViewState(evt.viewState)}
       mapStyle="https://tiles.openfreemap.org/styles/liberty"

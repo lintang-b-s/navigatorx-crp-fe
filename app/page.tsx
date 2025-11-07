@@ -413,7 +413,7 @@ export default function Home() {
           let speed = 0.0;
 
           if (orientation?.alpha == null) {
-            // buat debug di hp
+            // buat debugging di hp
             setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
           }
 
