@@ -363,7 +363,7 @@ export function MapComponent({
           anchor="center"
         >
           <div
-            className="bg-[#F7FBFA]/35 flex items-center justify-center
+            className="bg-[#F7FBFA] flex items-center justify-center
            rounded-full w-[50px] h-[50px]  "
           >
             <Image
