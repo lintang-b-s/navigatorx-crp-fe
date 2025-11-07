@@ -359,7 +359,7 @@ export function MapComponent({
         <Marker
           latitude={matchedGpsLoc.lat}
           longitude={matchedGpsLoc.lon}
-          rotation={gpsHeading}
+          rotation={0}
           anchor="center"
         >
           <div
