@@ -255,7 +255,7 @@ function showRouteResultMobile(
                 }}
               >
                 <AiOutlineThunderbolt size={18} color="white" />
-                Start Route{" "}
+                Navigate{" "}
               </button>
             </div>
             {routeDirections.map((direction, index) => (
@@ -651,12 +651,12 @@ function showRouteDirectionsComponent(
                      cursor-pointer aria-disabled:opacity-50 ml-auto mr-2 py-3 `}
           onClick={(e) => {
             toast.error(
-              "start route feature only avalable on mobile device view! "
+              "Navigate feature only avalable on mobile device view! "
             );
           }}
         >
           <AiOutlineThunderbolt size={18} color="white" />
-          <p>Start Route</p>
+          <p>Navigate</p>
           <FaLocationArrow size={20} color="white" />
         </button>
       </div>

@@ -95,7 +95,7 @@ export const fetchRouteCRP = async ({
         );
       }
     } else {
-      throw new Error("fetch route error");
+      throw new Error("navigatorx routing engine sedang ada perbaikan");
     }
   }
 };
