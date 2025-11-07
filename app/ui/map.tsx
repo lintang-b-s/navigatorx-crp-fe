@@ -359,14 +359,19 @@ export function MapComponent({
         <Marker
           latitude={matchedGpsLoc.lat}
           longitude={matchedGpsLoc.lon}
-          rotation={gpsHeading - faLocationArrowDegree}
+          rotation={gpsHeading}
           anchor="center"
         >
           <div
             className="bg-[#9CDCED]/35 flex items-center justify-center
            rounded-full w-[70px] h-[70px]  "
           >
-            <FaLocationArrow size={25} color="#00B0EB" />
+            <Image
+              src={"navigation_material.svg"}
+              alt="navigation icon"
+              width={30}
+              height={30}
+            />
           </div>
         </Marker>
       )}
