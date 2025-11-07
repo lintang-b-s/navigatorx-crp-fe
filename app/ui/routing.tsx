@@ -323,7 +323,7 @@ function showRouteResultMobile(
                       ? "border-b-[1px]"
                       : ""
                   }  border-[#D3DAE0] cursor-pointer group `}
-                  onClick={() => { 
+                  onClick={() => {
                     handleRouteClick(index);
                   }}
                 >
@@ -365,15 +365,13 @@ function showRouteResultMobile(
       ) : (
         <div className="flex flex-row mt-6 items-center ">
           <div className="mr-4">
-            {" "}
             <Image
-              // src={getTurnIcon(
-              //   props.routeDataCRP![activeRoute].driving_directions[
-              //     props.currentDirectionIndex
-              //   ].turn_type,
-              //   "icons_white"
-              // )}
-              src={getTurnIcon("TURN_RIGHT", "icons_white")}
+              src={getTurnIcon(
+                props.routeDataCRP![activeRoute].driving_directions[
+                  props.currentDirectionIndex
+                ].turn_type,
+                "icons_white"
+              )}
               width={60}
               height={60}
               alt={`turn-start-route`}
@@ -385,11 +383,11 @@ function showRouteResultMobile(
               {props.distanceFromNextTurnPoint.toPrecision(4)} m
             </p>
             <p className="text-2xl font-bold text-[#1DA1F2]  ">
-              {/* {
+              {
                 props.routeDataCRP![activeRoute].driving_directions[
                   props.currentDirectionIndex
                 ].street_name
-              } */}
+              }
             </p>
           </div>
         </div>

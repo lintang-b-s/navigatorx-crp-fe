@@ -34,6 +34,9 @@ import {
   isUserOffTheRoute,
 } from "./lib/routing";
 
+const INVALID_LAT = 91;
+const INVALID_LON = 181;
+
 export default function Home() {
   // real-time map matching states
   const [snappedEdgeID, setSnappedEdgeID] = useState<number>(-1);
@@ -76,8 +79,9 @@ export default function Home() {
   const speedMeanK = useRef<number>(500.0);
   const speedStdK = useRef<number>(500.0);
   const lastBearing = useRef<number>(0.0);
-  const prevMatchedGpsLoc = useRef<Gps>(undefined);
+  const prevGps = useRef<Gps>(undefined);
   const mapMatchStep = useRef<number>(1);
+  const deadReckoning = useRef<boolean>(false);
 
   const { replace } = useRouter();
   // search useffect
@@ -298,8 +302,10 @@ export default function Home() {
   const handleStartRoute = (start: boolean) => {
     setRouteStarted(start);
   };
+  const defaultConstantSpeed = 500.0; // meter/min
 
   const mapMatchSamplingInterval = 80; // 80ms
+  const lostGpsThreshold = 2000; // 2s
   // route started useffect
   useEffect(() => {
     if (routeStarted) {
@@ -308,27 +314,44 @@ export default function Home() {
         return;
       }
 
-      let currentGps: Gps;
       const ws = new WebSocket("wss://navigatorx.lintangbs.my.id/ws");
 
       ws.onerror = (error) => {
         toast.error("WebSocket connection error");
-        console.log(error);
       };
 
-      ws.onclose = (event) => {
-        console.warn("WebSocket closed:", {
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean,
-        });
+      ws.onclose = (event) => {};
 
-        toast.error(`WebSocket closed (code: ${event.code})`);
-      };
+      let prevTime: Date = new Date();
+      let currentGps: Gps;
 
       ws.onmessage = (event) => {
         try {
           const resp = JSON.parse(event.data);
+
+          if (
+            resp.data.matched_gps_point.matched_coord.lat == INVALID_LAT &&
+            resp.data.matched_gps_point.matched_coord.lon == INVALID_LON
+          ) {
+            // reset
+            mapMatchStep.current = 1;
+            candidates.current = [];
+            speedMeanK.current = 500.0;
+            speedStdK.current = 500.0;
+            lastBearing.current = 0.0;
+            return;
+          }
+
+          if (deadReckoning.current == true) {
+            prevGps.current = {
+              lat: resp.data.matched_gps_point.predicted_gps_coord.lat,
+              lon: resp.data.matched_gps_point.predicted_gps_coord.lon,
+              speed: resp.data.speed_mean_k,
+              time: prevTime,
+              delta_time: 0,
+              dead_reckoning: true,
+            };
+          }
 
           candidates.current = resp.data.candidates;
           speedMeanK.current = resp.data.speed_mean_k;
@@ -343,31 +366,47 @@ export default function Home() {
       };
 
       const intervalId = setInterval(async () => {
+        let currentTime: Date = new Date();
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
-            let currentTime: Date = new Date();
+            deadReckoning.current = false;
             let deltaTime: number = 0;
-            if (mapMatchStep.current > 1) {
+            let speed = 0.0;
+
+            if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
               deltaTime =
                 (currentTime.getTime() -
-                  (prevMatchedGpsLoc.current?.time?.getTime() ?? 0)) /
+                  (prevGps.current?.time?.getTime() ?? 0)) /
                 60000.0;
+              const distance =
+                haversineDistance(
+                  prevGps.current?.lat!,
+                  prevGps.current?.lon!,
+                  pos.coords.latitude,
+                  pos.coords.longitude
+                ) * 1000; //meter
+              if (deltaTime > 0) {
+                speed = distance / deltaTime; // meter/minute
+              }
             }
-            console.log("sample");
+
             if (
+              prevGps &&
+              prevGps.current &&
               haversineDistance(
                 pos.coords.latitude,
                 pos.coords.longitude,
-                prevMatchedGpsLoc.current?.lat!,
-                prevMatchedGpsLoc.current?.lon!
+                prevGps.current?.lat!,
+                prevGps.current?.lon!
               ) < 0.002 // kurang dari 2 meter
             ) {
               return;
             }
+
             currentGps = {
               lat: pos.coords.latitude,
               lon: pos.coords.longitude,
-              speed: speedMeanK.current,
+              speed: speed,
               delta_time: mapMatchStep.current == 1 ? 0 : deltaTime,
               time: currentTime,
               dead_reckoning: false,
@@ -389,15 +428,96 @@ export default function Home() {
             mapMatchStep.current += 1;
             setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
 
-            prevMatchedGpsLoc.current = currentGps;
+            prevGps.current = currentGps;
+            prevTime = currentTime;
           },
-          (err) => {},
+          (err) => {
+            if (
+              err.code == err.POSITION_UNAVAILABLE ||
+              err.code == err.TIMEOUT
+            ) {
+              // dead reckoning
+              let now = new Date();
+              if (
+                prevGps &&
+                prevGps.current &&
+                now.getTime() - prevGps.current?.time?.getTime() >
+                  lostGpsThreshold
+              ) {
+                deadReckoning.current = true;
+                currentGps = {
+                  lat: prevGps.current.lat,
+                  lon: prevGps.current.lon,
+                  speed: defaultConstantSpeed,
+                  delta_time: prevTime
+                    ? (currentTime.getTime() - prevTime.getTime()) / 60000.0
+                    : mapMatchSamplingInterval,
+                  time: currentTime,
+                  dead_reckoning: deadReckoning.current,
+                };
+
+                let mapMatchRequest: MapMatchRequest = {
+                  gps_point: currentGps,
+                  k: mapMatchStep.current,
+                  candidates: candidates.current,
+                  speed_mean_k: speedMeanK.current,
+                  speed_std_k: speedStdK.current,
+                  last_bearing: lastBearing.current,
+                };
+
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify(mapMatchRequest));
+                }
+
+                mapMatchStep.current += 1;
+
+                prevTime = currentTime;
+              }
+            }
+          },
           {
             enableHighAccuracy: true,
             maximumAge: 0,
             timeout: 5000,
           }
         );
+
+        let now = new Date();
+        if (
+          prevGps &&
+          prevGps.current &&
+          now.getTime() - prevGps.current?.time?.getTime() > lostGpsThreshold
+        ) {
+          // dead reckoning
+          deadReckoning.current = true;
+          currentGps = {
+            lat: prevGps.current.lat,
+            lon: prevGps.current.lon,
+            speed: defaultConstantSpeed,
+            delta_time: prevTime
+              ? (currentTime.getTime() - prevTime.getTime()) / 60000.0
+              : mapMatchSamplingInterval,
+            time: currentTime,
+            dead_reckoning: deadReckoning.current,
+          };
+
+          let mapMatchRequest: MapMatchRequest = {
+            gps_point: currentGps,
+            k: mapMatchStep.current,
+            candidates: candidates.current,
+            speed_mean_k: speedMeanK.current,
+            speed_std_k: speedStdK.current,
+            last_bearing: lastBearing.current,
+          };
+
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(mapMatchRequest));
+          }
+
+          mapMatchStep.current += 1;
+
+          prevTime = currentTime;
+        }
       }, mapMatchSamplingInterval);
 
       return () => {
@@ -407,7 +527,7 @@ export default function Home() {
         }
       };
     } else {
-      mapMatchStep.current = 0;
+      mapMatchStep.current = 1;
       candidates.current = [];
       speedMeanK.current = 500.0;
       speedStdK.current = 500.0;
