@@ -363,8 +363,8 @@ export function MapComponent({
           anchor="center"
         >
           <div
-            className="bg-[#9CDCED]/35 flex items-center justify-center
-           rounded-full w-[70px] h-[70px]  "
+            className="bg-[#F7FBFA]/35 flex items-center justify-center
+           rounded-full w-[50px] h-[50px]  "
           >
             <Image
               src={"navigation_material.svg"}
