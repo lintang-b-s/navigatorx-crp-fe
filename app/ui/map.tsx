@@ -19,7 +19,7 @@ import Image from "next/image";
 import { IoLocationSharp } from "react-icons/io5";
 import { FaLocationArrow } from "react-icons/fa";
 
-const userRouteMarkerDegree = 45.0; // in degrees
+const faLocationArrowDegree = 45.0; // in degrees
 
 export function MapComponent({
   lineData,
@@ -359,7 +359,7 @@ export function MapComponent({
         <Marker
           latitude={matchedGpsLoc.lat}
           longitude={matchedGpsLoc.lon}
-          rotation={gpsHeading - userRouteMarkerDegree}
+          rotation={gpsHeading - faLocationArrowDegree}
           anchor="center"
         >
           <div

@@ -33,12 +33,16 @@ import {
   getDistanceFromUserToNextTurn,
   isUserOffTheRoute,
 } from "./lib/routing";
+import { useDeviceOrientation } from "./hook";
 
 const INVALID_LAT = 91;
 const INVALID_LON = 181;
 
 export default function Home() {
   // real-time map matching states
+  const { orientation, requestAccess, revokeAccess, error } =
+    useDeviceOrientation();
+
   const [snappedEdgeID, setSnappedEdgeID] = useState<number>(-1);
   const [routeStarted, setRouteStarted] = useState(false);
   const [matchedGpsLoc, setMatchedGpsLoc] = useState<Coord>();
@@ -98,21 +102,34 @@ export default function Home() {
   const { replace } = useRouter();
   // search useffect
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLoc({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-        },
-        (error) => {
-          toast.error(error.message);
-        }
-      );
-    } else {
-      toast.error("Geolocation is not supported by this browser.");
-    }
+    const init = async () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setUserLoc({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            });
+          },
+          (error) => {
+            toast.error(error.message);
+          }
+        );
+      } else {
+        toast.error("Geolocation is not supported by this browser.");
+      }
+
+      const allowedOrientationPerm = await requestAccess();
+      if (allowedOrientationPerm) {
+        toast.success("Orientation permission granted");
+      } else {
+        toast.error("Orientation permission not granted");
+      }
+
+      replace(`${pathname}`);
+    };
+
+    init();
     replace(`${pathname}`);
   }, []);
 
@@ -320,6 +337,10 @@ export default function Home() {
   const handleStartRoute = (start: boolean) => {
     setRouteStarted(start);
   };
+
+  const normalizeHeading = (angle: number) => ((angle % 360) + 360) % 360;
+  let compassHeading = 0;
+
   const defaultConstantSpeed = 500.0; // meter/min
 
   const mapMatchSamplingInterval = 80; // 80ms
@@ -380,13 +401,23 @@ export default function Home() {
           toast.error("Failed to parse WebSocket message");
         }
       };
-     
+
       const watchId = navigator.geolocation.watchPosition(
         async (pos) => {
           const currentTime = new Date();
           deadReckoning.current = false;
           let deltaTime: number = 0;
           let speed = 0.0;
+
+          if (orientation?.alpha != null) {
+            // buat debug di hp 
+            toast.success("orientation.alpha: " + orientation.alpha);
+            setGpsHeading(orientation?.alpha!);
+          } else {
+            toast.success("pos.coords.heading: " + pos.coords.heading);
+
+            setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
+          }
 
           if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
             deltaTime =
@@ -404,6 +435,7 @@ export default function Home() {
               speed = distance / deltaTime; // meter/minute
             }
           }
+
 
           currentGps = {
             lat: pos.coords.latitude,
@@ -423,13 +455,11 @@ export default function Home() {
             last_bearing: lastBearing.current,
           };
 
-       
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify(mapMatchRequest));
           }
 
           mapMatchStep.current += 1;
-          setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
 
           prevGps.current = currentGps;
           prevTime = currentTime;
