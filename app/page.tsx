@@ -338,8 +338,6 @@ export default function Home() {
         toast.error("WebSocket connection error");
       };
 
-      ws.onclose = (event) => {};
-
       let prevTime: Date = new Date();
       let currentGps: Gps;
 
@@ -382,141 +380,38 @@ export default function Home() {
           toast.error("Failed to parse WebSocket message");
         }
       };
+     
+      const watchId = navigator.geolocation.watchPosition(
+        async (pos) => {
+          const currentTime = new Date();
+          deadReckoning.current = false;
+          let deltaTime: number = 0;
+          let speed = 0.0;
 
-      const intervalId = setInterval(async () => {
-        let currentTime: Date = new Date();
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            deadReckoning.current = false;
-            let deltaTime: number = 0;
-            let speed = 0.0;
-
-            if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
-              deltaTime =
-                (currentTime.getTime() -
-                  (prevGps.current?.time?.getTime() ?? 0)) /
-                60000.0;
-              const distance =
-                haversineDistance(
-                  prevGps.current?.lat!,
-                  prevGps.current?.lon!,
-                  pos.coords.latitude,
-                  pos.coords.longitude
-                ) * 1000; //meter
-              if (deltaTime > 0) {
-                speed = distance / deltaTime; // meter/minute
-              }
-            }
-
-            if (
-              prevGps &&
-              prevGps.current &&
+          if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
+            deltaTime =
+              (currentTime.getTime() -
+                (prevGps.current?.time?.getTime() ?? 0)) /
+              60000.0;
+            const distance =
               haversineDistance(
-                pos.coords.latitude,
-                pos.coords.longitude,
                 prevGps.current?.lat!,
-                prevGps.current?.lon!
-              ) < 0.002 // kurang dari 2 meter
-            ) {
-              return;
+                prevGps.current?.lon!,
+                pos.coords.latitude,
+                pos.coords.longitude
+              ) * 1000; //meter
+            if (deltaTime > 0) {
+              speed = distance / deltaTime; // meter/minute
             }
-
-            currentGps = {
-              lat: pos.coords.latitude,
-              lon: pos.coords.longitude,
-              speed: speed,
-              delta_time: mapMatchStep.current == 1 ? 0 : deltaTime,
-              time: currentTime,
-              dead_reckoning: false,
-            };
-
-            let mapMatchRequest: MapMatchRequest = {
-              gps_point: currentGps,
-              k: mapMatchStep.current,
-              candidates: candidates.current,
-              speed_mean_k: speedMeanK.current,
-              speed_std_k: speedStdK.current,
-              last_bearing: lastBearing.current,
-            };
-
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify(mapMatchRequest));
-            }
-
-            mapMatchStep.current += 1;
-            setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
-
-            prevGps.current = currentGps;
-            prevTime = currentTime;
-          },
-          (err) => {
-            if (
-              err.code == err.POSITION_UNAVAILABLE ||
-              err.code == err.TIMEOUT
-            ) {
-              // dead reckoning
-              let now = new Date();
-              if (
-                prevGps &&
-                prevGps.current &&
-                now.getTime() - prevGps.current?.time?.getTime() >
-                  lostGpsThreshold
-              ) {
-                deadReckoning.current = true;
-                currentGps = {
-                  lat: prevGps.current.lat,
-                  lon: prevGps.current.lon,
-                  speed: defaultConstantSpeed,
-                  delta_time: prevTime
-                    ? (currentTime.getTime() - prevTime.getTime()) / 60000.0
-                    : mapMatchSamplingInterval,
-                  time: currentTime,
-                  dead_reckoning: deadReckoning.current,
-                };
-
-                let mapMatchRequest: MapMatchRequest = {
-                  gps_point: currentGps,
-                  k: mapMatchStep.current,
-                  candidates: candidates.current,
-                  speed_mean_k: speedMeanK.current,
-                  speed_std_k: speedStdK.current,
-                  last_bearing: lastBearing.current,
-                };
-
-                if (ws.readyState === WebSocket.OPEN) {
-                  ws.send(JSON.stringify(mapMatchRequest));
-                }
-
-                mapMatchStep.current += 1;
-
-                prevTime = currentTime;
-              }
-            }
-          },
-          {
-            enableHighAccuracy: true,
-            maximumAge: 0,
-            timeout: 5000,
           }
-        );
 
-        let now = new Date();
-        if (
-          prevGps &&
-          prevGps.current &&
-          now.getTime() - prevGps.current?.time?.getTime() > lostGpsThreshold
-        ) {
-          // dead reckoning
-          deadReckoning.current = true;
           currentGps = {
-            lat: prevGps.current.lat,
-            lon: prevGps.current.lon,
-            speed: defaultConstantSpeed,
-            delta_time: prevTime
-              ? (currentTime.getTime() - prevTime.getTime()) / 60000.0
-              : mapMatchSamplingInterval,
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            speed: speed,
+            delta_time: mapMatchStep.current == 1 ? 0 : deltaTime,
             time: currentTime,
-            dead_reckoning: deadReckoning.current,
+            dead_reckoning: false,
           };
 
           let mapMatchRequest: MapMatchRequest = {
@@ -528,18 +423,70 @@ export default function Home() {
             last_bearing: lastBearing.current,
           };
 
+       
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify(mapMatchRequest));
           }
 
           mapMatchStep.current += 1;
+          setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
 
+          prevGps.current = currentGps;
           prevTime = currentTime;
+        },
+        (err) => {
+          const currentTime = new Date();
+          if (err.code == err.POSITION_UNAVAILABLE || err.code == err.TIMEOUT) {
+            // dead reckoning
+            let now = new Date();
+            if (
+              prevGps &&
+              prevGps.current &&
+              now.getTime() - prevGps.current?.time?.getTime() >
+                lostGpsThreshold
+            ) {
+              deadReckoning.current = true;
+              currentGps = {
+                lat: prevGps.current.lat,
+                lon: prevGps.current.lon,
+                speed: defaultConstantSpeed,
+                delta_time: prevTime
+                  ? (currentTime.getTime() - prevTime.getTime()) / 60000.0
+                  : mapMatchSamplingInterval,
+                time: currentTime,
+                dead_reckoning: deadReckoning.current,
+              };
+
+              let mapMatchRequest: MapMatchRequest = {
+                gps_point: currentGps,
+                k: mapMatchStep.current,
+                candidates: candidates.current,
+                speed_mean_k: speedMeanK.current,
+                speed_std_k: speedStdK.current,
+                last_bearing: lastBearing.current,
+              };
+
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(mapMatchRequest));
+              }
+
+              mapMatchStep.current += 1;
+
+              prevTime = currentTime;
+            }
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 5000,
         }
-      }, mapMatchSamplingInterval);
+      );
+      ws.onclose = (event) => {
+        navigator.geolocation.clearWatch(watchId);
+      };
 
       return () => {
-        clearInterval(intervalId);
         if (ws.readyState === WebSocket.OPEN) {
           ws.close(1000, "");
         }
@@ -550,7 +497,8 @@ export default function Home() {
       speedMeanK.current = 500.0;
       speedStdK.current = 500.0;
       lastBearing.current = 0.0;
-
+      prevGps.current = undefined;
+      deadReckoning.current = false;
       setMatchedGpsLoc(undefined);
       setSnappedEdgeID(0);
     }
