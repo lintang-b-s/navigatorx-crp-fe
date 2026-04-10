@@ -52,6 +52,7 @@ export interface AlternativeRoutesResponse {
     alternative_routes: RouteCRPResponse[];
   };
 }
+
 // for https://github.com/lintang-b-s/navigatorX-CH
 export const fetchRoute = async ({
   srcLat,
@@ -80,7 +81,7 @@ export const fetchRouteCRP = async ({
 }: RouteRequest): Promise<RouteCRPResponseWrapper> => {
   try {
     const { data } = await axios.get(
-      `https://navigatorx.lintangbs.my.id/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
+      `http://localhost:6060/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
       {}
     );
 
@@ -108,7 +109,7 @@ export const fetchAlternativeRoutes = async ({
 }: RouteRequest): Promise<AlternativeRoutesResponse> => {
   try {
     const { data } = await axios.get(
-      `https://navigatorx.lintangbs.my.id/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2`,
+      `http://localhost:6060/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2`,
       {}
     );
 
@@ -117,3 +118,4 @@ export const fetchAlternativeRoutes = async ({
     throw new Error("Failed to fetch search results");
   }
 };
+

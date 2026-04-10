@@ -21,7 +21,7 @@ export interface SearchResponse {
 export const fetchSearch = async (
   query: string,
   lat: number,
-  lon: number
+  lon: number,
 ): Promise<SearchResponse> => {
   try {
     const param = {
@@ -32,8 +32,9 @@ export const fetchSearch = async (
       lon: lon,
     };
     const { data } = await axios.get(
+      // lagi off vps
       `https://navigatorx.lintangbs.my.id/search/api/autocomplete?query=${param.query}&top_k=${param.topk}&offset=${param.offset}&lat=${param.lat}&lon=${param.lon}`,
-      {}
+      {},
     );
     return data;
   } catch (error) {
@@ -66,8 +67,9 @@ export const fetchReverseGeocoding = async ({
       lon: lon,
     };
     const { data } = await axios.get(
+      // lagi off vps
       `https://navigatorx.lintangbs.my.id/search/api/reverse?lat=${param.lat}&lon=${param.lon}`,
-      {}
+      {},
     );
     return data;
   } catch (error) {

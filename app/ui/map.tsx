@@ -11,6 +11,7 @@ import {
   NavigationControl,
   Popup,
 } from "@vis.gl/react-maplibre";
+// @ts-ignore
 import "maplibre-gl/dist/maplibre-gl.css"; // See notes below
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -97,7 +98,7 @@ export function MapComponent({
           zoomLevel = 10;
         }
         const midIndex = Math.floor(
-          alternativeRoutes![activeRoute].geometry.coordinates.length / 2
+          alternativeRoutes![activeRoute].geometry.coordinates.length / 2,
         );
 
         setViewState({
@@ -175,7 +176,7 @@ export function MapComponent({
             onGeolocate={(e) => {
               onUserLocationUpdateHandler(
                 e.coords.latitude,
-                e.coords.longitude
+                e.coords.longitude,
               );
               setViewState((prev) => ({
                 ...prev,
@@ -197,7 +198,7 @@ export function MapComponent({
             onGeolocate={(e) => {
               onUserLocationUpdateHandler(
                 e.coords.latitude,
-                e.coords.longitude
+                e.coords.longitude,
               );
             }}
             showAccuracyCircle={false}
@@ -363,7 +364,7 @@ export function MapComponent({
           anchor="center"
         >
           <div
-            className="bg-[#F7FBFA] flex items-center justify-center
+            className="bg-[#F7FBFA]/50 flex items-center justify-center
            rounded-full w-[50px] h-[50px]  "
           >
             <Image
@@ -489,6 +490,8 @@ function getTurnIconDirection(turnType: string): string {
       return "/icons2/turn-slight-right.png";
     case "KEEP_LEFT":
       return "/icons2/turn-slight-left.png";
+    case "MERGE_ONTO":
+      return `/icons2/merge_onto.png`;
   }
   return "";
 }

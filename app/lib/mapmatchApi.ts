@@ -59,7 +59,7 @@ export const fetchMapMatch = async (
 ): Promise<MapMatchResponse> => {
   try {
     const { data } = await axios.post(
-      `https://navigatorx.lintangbs.my.id/api/onlineMapMatch`,
+      `https://navigatorx.lintangbs.my.id/api/onlineMapMatch`, // lagi off vps
       request
     );
 

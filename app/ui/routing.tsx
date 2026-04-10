@@ -60,7 +60,7 @@ export function Router(props: RouterProps) {
             props.handleStartRoute,
             showDirections,
             handleShowDirections,
-            props.handleSetNextTurnIndex
+            props.handleSetNextTurnIndex,
           )}
           {showRouteResult(
             props,
@@ -69,14 +69,14 @@ export function Router(props: RouterProps) {
             showDirections,
             handleShowDirections,
             props.handleSetNextTurnIndex,
-            props.handleStartRoute
+            props.handleStartRoute,
           )}
           {showRouteEtaAndDistance(
             props,
             props.activeRoute,
             props.routeStarted,
             props.handleStartRoute,
-            nowTime
+            nowTime,
           )}
         </>
       ) : (
@@ -180,7 +180,7 @@ function showRouteResultMobile(
   handleStartRoute: (show: boolean) => void,
   showDirections: boolean = false,
   handleShowDirections: (show: boolean) => void,
-  handleSetNextTurnIndex: (index: number) => void
+  handleSetNextTurnIndex: (index: number) => void,
 ) {
   const routeDirections = props.routeDataCRP![
     activeRoute
@@ -203,7 +203,7 @@ function showRouteResultMobile(
         },
       ];
     },
-    []
+    [],
   );
   return (
     <div
@@ -240,7 +240,7 @@ function showRouteResultMobile(
                     props.sourceLoc?.osm_object.lat!,
                     props.sourceLoc?.osm_object.lon!,
                     props.userLoc.latitude,
-                    props.userLoc.longitude
+                    props.userLoc.longitude,
                   ) < 0.15 // distance antara source point & gps location user < 150 meter
                     ? "flex"
                     : "hidden"
@@ -374,7 +374,7 @@ function showRouteResultMobile(
                 props.routeDataCRP![activeRoute].driving_directions[
                   props.currentDirectionIndex
                 ].turn_type,
-                "icons_white"
+                "icons_white",
               )}
               width={60}
               height={60}
@@ -405,7 +405,7 @@ function showRouteEtaAndDistance(
   activeRoute: number,
   routeStarted: boolean = false,
   handleStartRoute: (show: boolean) => void,
-  nowTime: Date
+  nowTime: Date,
 ) {
   return (
     <div
@@ -420,7 +420,7 @@ function showRouteEtaAndDistance(
         <p className="font-bold text-xl tracking-wide ">
           {new Date(
             nowTime.getTime() +
-              props.routeDataCRP![activeRoute].travel_time * 60000
+              props.routeDataCRP![activeRoute].travel_time * 60000,
           ).toLocaleTimeString("en-US", {
             hour: "2-digit",
             minute: "2-digit",
@@ -457,7 +457,7 @@ function showRouteResult(
   showDirections: boolean = false,
   handleShowDirections: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
-  handleStartRoute: (start: boolean) => void
+  handleStartRoute: (start: boolean) => void,
 ) {
   return (
     <div
@@ -587,7 +587,7 @@ function showRouteResult(
           handleShowDirections,
           props.handleDirectionActive,
           handleSetNextTurnIndex,
-          handleStartRoute
+          handleStartRoute,
         )
       )}
     </div>
@@ -600,7 +600,7 @@ function showRouteDirectionsComponent(
   handleShowDirections: (show: boolean) => void,
   handleDirectionActive: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
-  handleStartRoute: (start: boolean) => void
+  handleStartRoute: (start: boolean) => void,
 ) {
   const routeDirections = route.driving_directions.reduce<
     CumulativeDirection[]
@@ -651,7 +651,7 @@ function showRouteDirectionsComponent(
                      cursor-pointer aria-disabled:opacity-50 ml-auto mr-2 py-3 `}
           onClick={(e) => {
             toast.error(
-              "Navigate feature only avalable on mobile device view! "
+              "Navigate feature only avalable on mobile device view! ",
             );
           }}
         >
@@ -724,6 +724,8 @@ function getTurnIcon(turnType: string, directory: string): string {
       return `/${directory}/fork_left.png`;
     case "KEEP_RIGHT":
       return `/${directory}/fork_right.png`;
+    case "MERGE_ONTO":
+      return `/${directory}/merge_onto.png`;
   }
   return "";
 }

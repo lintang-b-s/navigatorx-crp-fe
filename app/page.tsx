@@ -18,8 +18,8 @@ import {
   RouteResponse,
 } from "./lib/navigatorxApi";
 import polyline from "@mapbox/polyline";
-import { Layer, Source } from "@vis.gl/react-maplibre";
 import { LineData } from "./types/definition";
+import { Layer, Source } from "@vis.gl/react-maplibre";
 import {
   Candidate,
   Coord,
@@ -113,7 +113,7 @@ export default function Home() {
           },
           (error) => {
             toast.error(error.message);
-          }
+          },
         );
       } else {
         toast.error("Geolocation is not supported by this browser.");
@@ -167,7 +167,7 @@ export default function Home() {
       key,
       `${place.osm_object.name} ${
         place.osm_object.address != "" ? `, ${place.osm_object.address}` : ""
-      }`
+      }`,
     );
     replace(`${pathname}?${p.toString()}`);
   };
@@ -190,7 +190,7 @@ export default function Home() {
   };
 
   const onHandleGetRoutes = async (
-    e: MouseEvent<HTMLButtonElement, MouseEvent>
+    e: MouseEvent<HTMLButtonElement, MouseEvent>,
   ) => {
     if (!sourceLoc || !destinationLoc) {
       toast.error("Please select both source and destination");
@@ -220,7 +220,7 @@ export default function Home() {
       }
 
       spRouteData.data.distance = parseFloat(
-        (spRouteData.data.distance / 1000).toFixed(2)
+        (spRouteData.data.distance / 1000).toFixed(2),
       );
 
       setActiveRoute(0);
@@ -275,14 +275,13 @@ export default function Home() {
         setRouteData([spRouteData.data]);
       }
     } catch (error: any) {
-    
       toast.error(error.message);
     }
   };
 
   const onHandleReverseGeocoding = async (
     e: MouseEvent<HTMLButtonElement, MouseEvent>,
-    isSource: boolean
+    isSource: boolean,
   ) => {
     if (!userLoc) {
       toast.error("Please select both source and destination");
@@ -428,7 +427,7 @@ export default function Home() {
                 prevGps.current?.lat!,
                 prevGps.current?.lon!,
                 pos.coords.latitude,
-                pos.coords.longitude
+                pos.coords.longitude,
               ) * 1000; //meter
             if (deltaTime > 0) {
               speed = distance / deltaTime; // meter/minute
@@ -508,7 +507,7 @@ export default function Home() {
           enableHighAccuracy: true,
           maximumAge: 0,
           timeout: 5000,
-        }
+        },
       );
       ws.onclose = (event) => {
         navigator.geolocation.clearWatch(watchId);
@@ -549,7 +548,7 @@ export default function Home() {
         getDistanceFromUserToNextTurn({
           matchedGpsLoc: matchedGpsLoc,
           nextTurnPoint: usedRouteDirections![directionsIndex].turn_point,
-        }) * 1000.0
+        }) * 1000.0,
       );
     }
 
@@ -581,7 +580,7 @@ export default function Home() {
             setRouteData((prev) => {
               if (!prev) return [newSpRouteData.data];
               return prev.map((r, i) =>
-                i === activeRoute ? newSpRouteData.data : r
+                i === activeRoute ? newSpRouteData.data : r,
               );
             });
             const coords = polyline.decode(newSpRouteData.data.path);
