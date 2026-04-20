@@ -57,6 +57,8 @@ export type MapComponentProps = {
   onSelectSource: (place: Place) => void;
   onSelectDestination: (place: Place) => void;
   matchedGpsLoc: Coord | undefined;
+  matchedSpeedMpm: number;
+  currentDirectionIndex: number;
   routeStarted: boolean;
   userHeading: number;
 };
