@@ -23,6 +23,12 @@ import { AiOutlineThunderbolt } from "react-icons/ai";
 
 import { FaCheck } from "react-icons/fa";
 
+const formatMinutes = (minutes: number): string => {
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 1,
+  }).format(minutes);
+};
+
 export function Router(props: RouterProps) {
   const [isSourceFocused, setIsSourceFocused] = useState(false);
   const [showDirections, setShowDirections] = useState(false);
@@ -291,7 +297,7 @@ function showRouteResultMobile(
                     </p>
                   </div>
                   <p className="text-sm font-light">
-                    {direction.cumulativeEta.toPrecision(2)} menit (
+                    {formatMinutes(direction.cumulativeEta)} menit (
                     {Math.round(direction.cumulativeDistance)} m)
                   </p>
                 </div>
@@ -696,7 +702,7 @@ function showRouteDirectionsComponent(
               </p>
             </div>
             <p className="text-sm font-light">
-              {direction.cumulativeEta.toPrecision(2)} menit (
+              {formatMinutes(direction.cumulativeEta)} menit (
               {Math.round(direction.cumulativeDistance)} m)
             </p>
           </div>
