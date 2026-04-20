@@ -64,6 +64,7 @@ export default function Home() {
     LineData[]
   >([]);
   const [isAlternativeChecked, setIsAlternativeChecked] = useState(false);
+  const [isFetchingRoutes, setIsFetchingRoutes] = useState(false);
 
   const [showResult, setShowResult] = useState(false);
   const [nextTurnIndex, setNextTurnIndex] = useState(-1);
@@ -185,6 +186,10 @@ export default function Home() {
   const onHandleGetRoutes = async (
     e: MouseEvent<HTMLButtonElement, MouseEvent>,
   ) => {
+    if (isFetchingRoutes) {
+      return;
+    }
+
     if (!sourceLoc || !destinationLoc) {
       toast.error("Please select both source and destination");
       return;
@@ -193,6 +198,7 @@ export default function Home() {
     e.preventDefault();
 
     try {
+      setIsFetchingRoutes(true);
       setRouteData([]);
       const reqBody = {
         srcLat: sourceLoc?.osm_object.lat!,
@@ -270,6 +276,8 @@ export default function Home() {
       }
     } catch (error: any) {
       toast.error(error.message);
+    } finally {
+      setIsFetchingRoutes(false);
     }
   };
 
@@ -641,6 +649,7 @@ export default function Home() {
         sourceSearchActive={handleFocusSourceSearch}
         destinationSearchActive={setIsDestinationFocused}
         onHandleGetRoutes={onHandleGetRoutes}
+        isFetchingRoutes={isFetchingRoutes}
         isSourceFocused={isSourceFocused}
         isDestinationFocused={isDestinationFocused}
         onHandleReverseGeocoding={onHandleReverseGeocoding}
