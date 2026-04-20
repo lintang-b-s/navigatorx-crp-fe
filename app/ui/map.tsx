@@ -19,6 +19,7 @@ import { LineData, MapComponentProps } from "../types/definition";
 import Image from "next/image";
 import { IoLocationSharp } from "react-icons/io5";
 import { FaLocationArrow } from "react-icons/fa";
+import polyline from "@mapbox/polyline";
 
 const faLocationArrowDegree = 45.0; // in degrees
 
@@ -48,6 +49,57 @@ export function MapComponent({
   });
 
   const [touchStartTime, setTouchStartTime] = useState<number | null>(null);
+
+  const activeRouteCoordinates = React.useMemo(() => {
+    if (activeRoute === 0) {
+      return lineData?.geometry.coordinates ?? [];
+    }
+
+    return alternativeRoutes?.[activeRoute]?.geometry.coordinates ?? [];
+  }, [activeRoute, lineData, alternativeRoutes]);
+
+  const turnVisuals = React.useMemo(() => {
+    if (!routeDataCRP?.[activeRoute]?.driving_directions?.length) {
+      return [];
+    }
+
+    return routeDataCRP[activeRoute].driving_directions.map((turn) => {
+      const fallbackPoint: [number, number] = [
+        turn.turn_point.lon,
+        turn.turn_point.lat,
+      ];
+
+      const turnPolylineCoordinates = turn.polyline
+        ? polyline
+            .decode(turn.polyline)
+            .map(([lat, lon]) => [lon, lat] as [number, number])
+        : [];
+      const lastTurnPolylineCoord =
+        turnPolylineCoordinates[turnPolylineCoordinates.length - 1];
+
+      const snapFromTurnPolyline = findBestSnapPoint(
+        lastTurnPolylineCoord ?? fallbackPoint,
+        turnPolylineCoordinates,
+      );
+
+      const snapFromActiveRoute = findBestSnapPoint(
+        snapFromTurnPolyline?.point ?? fallbackPoint,
+        activeRouteCoordinates,
+      );
+
+      return {
+        ...turn,
+        markerPoint:
+          snapFromActiveRoute?.point ??
+          snapFromTurnPolyline?.point ??
+          fallbackPoint,
+        bearing:
+          snapFromActiveRoute?.bearing ??
+          snapFromTurnPolyline?.bearing ??
+          (turn.turn_bearing * 180) / Math.PI,
+      };
+    });
+  }, [activeRoute, activeRouteCoordinates, routeDataCRP]);
 
   function handleTouchStart(evt: any) {
     setTouchStartTime(Date.now());
@@ -298,32 +350,52 @@ export function MapComponent({
       )}
 
       {isDirectionActive &&
-        routeDataCRP &&
-        routeDataCRP[activeRoute].driving_directions.map((turn, i) => {
+        turnVisuals.map((turn, i) => {
           const turnIcon = getTurnIconDirection(turn.turn_type);
+          const indicatorStyle = getDirectionIndicatorStyle(viewState.zoom);
+          const mapBearing = routeStarted ? userHeading : 0;
 
-          if (turnIcon == "") {
+          if (turnIcon == "" || indicatorStyle.opacity === 0) {
             return null;
           }
+
           return (
             <Marker
               key={`turn-${i}`}
-              longitude={turn.turn_point.lon}
-              latitude={turn.turn_point.lat}
+              longitude={turn.markerPoint[0]}
+              latitude={turn.markerPoint[1]}
               anchor="center"
-              scale={0.55}
             >
-              <Image
-                src={turnIcon}
-                alt="turn icon"
-                width={30}
-                height={30}
+              <div
                 style={{
-                  transform: `rotate(${
-                    (turn.turn_bearing * 180) / Math.PI - userHeading
-                  }deg)`,
+                  opacity: indicatorStyle.opacity,
+                  transform: `scale(${indicatorStyle.scale})`,
+                  transformOrigin: "center",
+                  transition: "opacity 120ms linear, transform 120ms linear",
                 }}
-              />
+                className="flex flex-col items-center gap-1"
+              >
+                <Image
+                  src={turnIcon}
+                  alt="turn icon"
+                  width={30}
+                  height={30}
+                  style={{
+                    transform: `rotate(${turn.bearing - mapBearing}deg)`,
+                    filter: "brightness(0) invert(1)",
+                  }}
+                />
+                <p
+                  className="text-center text-white font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]"
+                  style={{
+                    fontSize: `${indicatorStyle.textSizePx}px`,
+                    maxWidth: `${indicatorStyle.labelWidthPx}px`,
+                    lineHeight: 1.15,
+                  }}
+                >
+                  {turn.instruction}
+                </p>
+              </div>
             </Marker>
           );
         })}
@@ -473,25 +545,116 @@ export function MapComponent({
 function getTurnIconDirection(turnType: string): string {
   switch (turnType) {
     case "TURN_RIGHT":
-      return "/icons2/turn-right.png";
+      return "/icons_white/turn_right.png";
     case "TURN_SHARP_RIGHT":
-      return "/icons2/turn-right.png";
+      return "/icons_white/turn_right.png";
     case "TURN_LEFT":
-      return "/icons2/turn-left.png";
+      return "/icons_white/turn_left.png";
     case "TURN_SHARP_LEFT":
-      return "/icons2/turn-left.png";
+      return "/icons_white/turn_left.png";
     case "":
-      return "/icons2/straight.png";
+      return "/icons/straight.png";
     case "TURN_SLIGHT_RIGHT":
-      return "/icons2/turn-slight-right.png";
+      return "/icons_white/turn_slight_right.png";
     case "TURN_SLIGHT_LEFT":
-      return "/icons2/turn-slight-left.png";
+      return "/icons_white/turn_slight_left.png";
     case "KEEP_RIGHT":
-      return "/icons2/turn-slight-right.png";
+      return "/icons_white/turn_slight_right.png";
     case "KEEP_LEFT":
-      return "/icons2/turn-slight-left.png";
+      return "/icons_white/turn_slight_left.png";
     case "MERGE_ONTO":
-      return `/icons2/merge_onto.png`;
+      return `/icons_white/merge_onto.png`;
   }
   return "";
+}
+
+function getDirectionIndicatorStyle(zoom: number) {
+  if (zoom <= 13.4) {
+    return { opacity: 0, scale: 0.4, textSizePx: 8, labelWidthPx: 100 };
+  }
+
+  if (zoom >= 17.5) {
+    return { opacity: 1, scale: 1, textSizePx: 13, labelWidthPx: 170 };
+  }
+
+  const ratio = (zoom - 13.4) / (17.5 - 13.4);
+
+  return {
+    opacity: ratio,
+    scale: 0.4 + ratio * 0.6,
+    textSizePx: 8 + ratio * 5,
+    labelWidthPx: 100 + ratio * 70,
+  };
+}
+
+function findBestSnapPoint(
+  point: [number, number],
+  routeCoordinates: number[][],
+): { point: [number, number]; bearing: number } | null {
+  if (routeCoordinates.length < 2) {
+    return null;
+  }
+
+  let bestDistanceSq = Infinity;
+  let bestPoint: [number, number] = point;
+  let bestBearing = 0;
+
+  for (let i = 0; i < routeCoordinates.length - 1; i++) {
+    const start = routeCoordinates[i] as [number, number];
+    const end = routeCoordinates[i + 1] as [number, number];
+
+    const snapped = snapPointToSegment(point, start, end);
+    const dx = point[0] - snapped[0];
+    const dy = point[1] - snapped[1];
+    const distanceSq = dx * dx + dy * dy;
+
+    if (distanceSq < bestDistanceSq) {
+      bestDistanceSq = distanceSq;
+      bestPoint = snapped;
+      bestBearing = getBearingDegrees(start, end);
+    }
+  }
+
+  return { point: bestPoint, bearing: bestBearing };
+}
+
+function snapPointToSegment(
+  point: [number, number],
+  start: [number, number],
+  end: [number, number],
+): [number, number] {
+  const segmentX = end[0] - start[0];
+  const segmentY = end[1] - start[1];
+  const segmentLengthSq = segmentX * segmentX + segmentY * segmentY;
+
+  if (segmentLengthSq === 0) {
+    return start;
+  }
+
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      ((point[0] - start[0]) * segmentX + (point[1] - start[1]) * segmentY) /
+        segmentLengthSq,
+    ),
+  );
+
+  return [start[0] + t * segmentX, start[1] + t * segmentY];
+}
+
+function getBearingDegrees(start: [number, number], end: [number, number]) {
+  const startLat = (start[1] * Math.PI) / 180;
+  const startLon = (start[0] * Math.PI) / 180;
+  const endLat = (end[1] * Math.PI) / 180;
+  const endLon = (end[0] * Math.PI) / 180;
+
+  const dLon = endLon - startLon;
+  const y = Math.sin(dLon) * Math.cos(endLat);
+  const x =
+    Math.cos(startLat) * Math.sin(endLat) -
+    Math.sin(startLat) * Math.cos(endLat) * Math.cos(dLon);
+
+  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
+  return (bearing + 360) % 360;
 }
