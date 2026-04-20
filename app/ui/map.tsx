@@ -19,8 +19,114 @@ import { LineData, MapComponentProps } from "../types/definition";
 import Image from "next/image";
 import { IoLocationSharp } from "react-icons/io5";
 import { FaLocationArrow } from "react-icons/fa";
+import polyline from "@mapbox/polyline";
 
 const faLocationArrowDegree = 45.0; // in degrees
+const MIN_ANIMATION_DURATION_SECONDS = 0.1;
+const MAX_ANIMATION_DURATION_SECONDS = 1.2;
+
+const toRadians = (value: number) => (value * Math.PI) / 180;
+const distanceInMeters = (
+  from: [number, number],
+  to: [number, number],
+): number => {
+  const earthRadiusM = 6371000;
+  const dLat = toRadians(to[1] - from[1]);
+  const dLon = toRadians(to[0] - from[0]);
+  const lat1 = toRadians(from[1]);
+  const lat2 = toRadians(to[1]);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+  return 2 * earthRadiusM * Math.asin(Math.sqrt(a));
+};
+
+const getNearestPointIndex = (
+  target: [number, number],
+  points: [number, number][],
+) => {
+  let nearestIdx = 0;
+  let nearestDistance = Number.MAX_SAFE_INTEGER;
+
+  for (let i = 0; i < points.length; i++) {
+    const currentDistance = distanceInMeters(target, points[i]);
+    if (currentDistance < nearestDistance) {
+      nearestDistance = currentDistance;
+      nearestIdx = i;
+    }
+  }
+
+  return nearestIdx;
+};
+
+const buildAnimationPath = (
+  from: [number, number],
+  to: [number, number],
+  directionPolyline: [number, number][],
+): [number, number][] => {
+  if (directionPolyline.length < 2) {
+    return [from, to];
+  }
+
+  const fromIndex = getNearestPointIndex(from, directionPolyline);
+  const toIndex = getNearestPointIndex(to, directionPolyline);
+
+  if (fromIndex <= toIndex) {
+    return [from, ...directionPolyline.slice(fromIndex + 1, toIndex + 1), to];
+  }
+
+  return [from, to];
+};
+
+const getPointAtProgress = (path: [number, number][], progress: number) => {
+  if (path.length === 0) {
+    return undefined;
+  }
+  if (path.length === 1) {
+    return path[0];
+  }
+
+  const segmentLengths: number[] = [];
+  let totalLength = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const segmentLength = distanceInMeters(path[i], path[i + 1]);
+    segmentLengths.push(segmentLength);
+    totalLength += segmentLength;
+  }
+
+  if (totalLength <= 0) {
+    return path[path.length - 1];
+  }
+
+  const targetDistance = Math.min(Math.max(progress, 0), 1) * totalLength;
+  let traversed = 0;
+
+  for (let i = 0; i < segmentLengths.length; i++) {
+    const nextTraversed = traversed + segmentLengths[i];
+    if (targetDistance <= nextTraversed) {
+      const localProgress = (targetDistance - traversed) / segmentLengths[i];
+      const start = path[i];
+      const end = path[i + 1];
+      return [
+        start[0] + (end[0] - start[0]) * localProgress,
+        start[1] + (end[1] - start[1]) * localProgress,
+      ] as [number, number];
+    }
+    traversed = nextTraversed;
+  }
+
+  return path[path.length - 1];
+};
+
+declare global {
+  interface Window {
+    gsap?: {
+      to: (target: object, vars: Record<string, unknown>) => { kill: () => void };
+    };
+  }
+}
 
 export function MapComponent({
   lineData,
@@ -35,7 +141,12 @@ export function MapComponent({
   matchedGpsLoc,
   routeStarted,
   userHeading,
+  matchedSpeedMpm,
+  currentDirectionIndex,
 }: MapComponentProps) {
+  const [animatedMatchedGpsLoc, setAnimatedMatchedGpsLoc] = useState(matchedGpsLoc);
+  const animationRef = React.useRef<{ kill: () => void } | null>(null);
+
   const [contextMenuCoord, setContextMenuCoord] = useState<{
     lng: number;
     lat: number;
@@ -61,11 +172,85 @@ export function MapComponent({
   }
 
   useEffect(() => {
+    if (!routeStarted) {
+      animationRef.current?.kill();
+      animationRef.current = null;
+      setAnimatedMatchedGpsLoc(matchedGpsLoc);
+    }
+  }, [routeStarted, matchedGpsLoc]);
+
+  useEffect(() => {
+    if (!routeStarted || !matchedGpsLoc) {
+      return;
+    }
+
+    const fromCoord = animatedMatchedGpsLoc ?? matchedGpsLoc;
+    const toCoord: [number, number] = [matchedGpsLoc.lon, matchedGpsLoc.lat];
+    const usedRoute = routeDataCRP?.[activeRoute];
+    const currentDirection = usedRoute?.driving_directions[currentDirectionIndex];
+    const decodedDirectionPolyline = currentDirection?.polyline
+      ? polyline
+          .decode(currentDirection.polyline)
+          .map((coord) => [coord[1], coord[0]] as [number, number])
+      : [];
+
+    const path = buildAnimationPath(
+      [fromCoord.lon, fromCoord.lat],
+      toCoord,
+      decodedDirectionPolyline,
+    );
+    const distance = path.reduce((total, _, index) => {
+      if (index === 0) {
+        return total;
+      }
+      return total + distanceInMeters(path[index - 1], path[index]);
+    }, 0);
+    const speedMps = Math.max(matchedSpeedMpm / 60, 2);
+    const duration = Math.min(
+      MAX_ANIMATION_DURATION_SECONDS,
+      Math.max(MIN_ANIMATION_DURATION_SECONDS, distance / speedMps),
+    );
+
+    animationRef.current?.kill();
+
+    const gsap = window.gsap;
+    if (!gsap) {
+      setAnimatedMatchedGpsLoc(matchedGpsLoc);
+      return;
+    }
+
+    const tweenState = { progress: 0 };
+    animationRef.current = gsap.to(tweenState, {
+      progress: 1,
+      duration,
+      ease: "none",
+      onUpdate: () => {
+        const point = getPointAtProgress(path, tweenState.progress);
+        if (!point) return;
+        setAnimatedMatchedGpsLoc({ lon: point[0], lat: point[1] });
+      },
+    });
+  }, [
+    matchedGpsLoc,
+    routeStarted,
+    matchedSpeedMpm,
+    routeDataCRP,
+    activeRoute,
+    currentDirectionIndex,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      animationRef.current?.kill();
+    };
+  }, []);
+
+  useEffect(() => {
     if (routeStarted && matchedGpsLoc) {
       // update view state to user current matched gps location
       setViewState({
-        longitude: matchedGpsLoc!.lon,
-        latitude: matchedGpsLoc!.lat,
+        longitude: animatedMatchedGpsLoc?.lon ?? matchedGpsLoc!.lon,
+        latitude: animatedMatchedGpsLoc?.lat ?? matchedGpsLoc!.lat,
         zoom: 16,
       });
       return;
@@ -134,6 +319,7 @@ export function MapComponent({
     alternativeRoutes,
     routeStarted,
     matchedGpsLoc,
+    animatedMatchedGpsLoc,
   ]);
 
   useEffect(() => {
@@ -356,10 +542,10 @@ export function MapComponent({
         </>
       )}
 
-      {routeStarted && matchedGpsLoc && (
+      {routeStarted && (animatedMatchedGpsLoc ?? matchedGpsLoc) && (
         <Marker
-          latitude={matchedGpsLoc.lat}
-          longitude={matchedGpsLoc.lon}
+          latitude={(animatedMatchedGpsLoc ?? matchedGpsLoc)!.lat}
+          longitude={(animatedMatchedGpsLoc ?? matchedGpsLoc)!.lon}
           rotation={userHeading - faLocationArrowDegree}
           anchor="center"
         >

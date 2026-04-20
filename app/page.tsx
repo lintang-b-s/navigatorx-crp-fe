@@ -45,6 +45,7 @@ export default function Home() {
   const [snappedEdgeID, setSnappedEdgeID] = useState<number>(-1);
   const [routeStarted, setRouteStarted] = useState(false);
   const [matchedGpsLoc, setMatchedGpsLoc] = useState<Coord>();
+  const [matchedSpeedMpm, setMatchedSpeedMpm] = useState<number>(0);
   const [gpsHeading, setGpsHeading] = useState<number>(0); // bearing (user heading angle from North)
   const [matchedHeading, setMatchedHeading] = useState<number>();
   const [distanceFromNextTurnPoint, setDistanceFromNextTurnPoint] =
@@ -402,6 +403,7 @@ export default function Home() {
           candidates.current = resp.data.candidates;
           speedMeanK.current = resp.data.speed_mean_k;
           speedStdK.current = resp.data.speed_std_k;
+          setMatchedSpeedMpm(resp.data.speed_mean_k);
           lastBearing.current = resp.data.edge_initial_bearing;
           setMatchedHeading(
             normalizeBearing(resp.data.edge_initial_bearing * RAD_TO_DEG),
@@ -536,6 +538,7 @@ export default function Home() {
       prevGps.current = undefined;
       deadReckoning.current = false;
       setMatchedGpsLoc(undefined);
+      setMatchedSpeedMpm(0);
       setMatchedHeading(undefined);
       setSnappedEdgeID(0);
     }
@@ -654,6 +657,8 @@ export default function Home() {
         onSelectDestination={onSelectDestination}
         routeStarted={routeStarted}
         matchedGpsLoc={matchedGpsLoc}
+        matchedSpeedMpm={matchedSpeedMpm}
+        currentDirectionIndex={currentDirectionIndex}
         userHeading={
           matchedHeading !== undefined ? matchedHeading : normalizeBearing(gpsHeading)
         }
