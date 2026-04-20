@@ -205,6 +205,9 @@ export default function Home() {
 
     try {
       setIsFetchingRoutes(true);
+      setRouteStarted(false);
+      setIsDirectionActive(false);
+      setNextTurnIndex(-1);
       setRouteData([]);
       const reqBody = {
         srcLat: sourceLoc?.osm_object.lat!,
