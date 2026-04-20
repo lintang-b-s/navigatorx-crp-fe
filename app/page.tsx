@@ -206,7 +206,6 @@ export default function Home() {
     try {
       setIsFetchingRoutes(true);
       setRouteStarted(false);
-      setIsDirectionActive(false);
       setNextTurnIndex(-1);
       setRouteData([]);
       const reqBody = {
