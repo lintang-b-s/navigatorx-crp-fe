@@ -34,7 +34,7 @@ export function MapComponent({
   onSelectDestination,
   matchedGpsLoc,
   routeStarted,
-  gpsHeading,
+  userHeading,
 }: MapComponentProps) {
   const [contextMenuCoord, setContextMenuCoord] = useState<{
     lng: number;
@@ -150,7 +150,7 @@ export function MapComponent({
   return (
     <Map
       {...viewState}
-      bearing={routeStarted ? gpsHeading : 0}
+      bearing={routeStarted ? userHeading : 0}
       style={{ width: "100vw", height: "100vh" }}
       onMove={(evt) => setViewState(evt.viewState)}
       mapStyle="https://tiles.openfreemap.org/styles/liberty"
@@ -320,7 +320,7 @@ export function MapComponent({
                 height={30}
                 style={{
                   transform: `rotate(${
-                    (turn.turn_bearing * 180) / Math.PI - gpsHeading
+                    (turn.turn_bearing * 180) / Math.PI - userHeading
                   }deg)`,
                 }}
               />
@@ -360,7 +360,7 @@ export function MapComponent({
         <Marker
           latitude={matchedGpsLoc.lat}
           longitude={matchedGpsLoc.lon}
-          rotation={0}
+          rotation={userHeading - faLocationArrowDegree}
           anchor="center"
         >
           <div
