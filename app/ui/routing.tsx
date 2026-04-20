@@ -127,7 +127,11 @@ export function Router(props: RouterProps) {
             </div>
 
             <div className="flex flex-col items-center gap-2  ">
-              <Button className="" onClick={(e) => props.onHandleGetRoutes(e)}>
+              <Button
+                className=""
+                onClick={(e) => props.onHandleGetRoutes(e)}
+                disabled={props.isFetchingRoutes}
+              >
                 <CiRoute size={30} />
               </Button>
 
@@ -501,7 +505,11 @@ function showRouteResult(
           </div>
 
           <div className="flex flex-col items-center gap-2  ">
-            <Button className="" onClick={(e) => props.onHandleGetRoutes(e)}>
+            <Button
+              className=""
+              onClick={(e) => props.onHandleGetRoutes(e)}
+              disabled={props.isFetchingRoutes}
+            >
               <CiRoute size={30} />
             </Button>
 
