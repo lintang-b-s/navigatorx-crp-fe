@@ -90,6 +90,17 @@ export const fetchRouteCRP = async ({
     if (error.response) {
       if (error.response.status === 502) {
         throw new Error("navigatorx routing engine sedang ada perbaikan");
+      } else if (error.response.status === 400) {
+        const backendMessage =
+          error.response.data?.message ||
+          error.response.data?.error ||
+          error.response.data?.detail;
+
+        if (typeof backendMessage === "string" && backendMessage.trim()) {
+          throw new Error(backendMessage);
+        }
+
+        throw new Error("Bad request");
       } else {
         throw new Error(
           `Server error (${error.response.status}): ${error.response.statusText}`
@@ -118,4 +129,3 @@ export const fetchAlternativeRoutes = async ({
     throw new Error("Failed to fetch search results");
   }
 };
-
