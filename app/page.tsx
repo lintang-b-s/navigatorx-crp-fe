@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import { MapComponent } from "@/app/ui/map";
 import { Router } from "@/app/ui/routing";
 import { SearchResults } from "./ui/searchResult";
@@ -9,21 +8,16 @@ import { fetchReverseGeocoding, fetchSearch, Place } from "@/app/lib/searchApi";
 import toast from "react-hot-toast";
 import {
   AlternativeRoutesResponse,
-  Direction,
   fetchAlternativeRoutes,
-  fetchRoute,
   fetchRouteCRP,
   RouteCRPResponse,
   RouteCRPResponseWrapper,
-  RouteResponse,
 } from "./lib/navigatorxApi";
 import polyline from "@mapbox/polyline";
 import { LineData } from "./types/definition";
-import { Layer, Source } from "@vis.gl/react-maplibre";
 import {
   Candidate,
   Coord,
-  fetchMapMatch,
   Gps,
   MapMatchRequest,
 } from "./lib/mapmatchApi";
@@ -130,7 +124,6 @@ export default function Home() {
     };
 
     init();
-    replace(`${pathname}`);
   }, []);
 
   useEffect(() => {
@@ -145,7 +138,7 @@ export default function Home() {
       if (!coords) {
         fetchSearch(source, userLoc.latitude, userLoc.longitude)
           .then((resp) => setSearchResults(resp.data))
-          .catch((e) => toast.error(e.error));
+          .catch((e) => toast.error(e.message));
         setShowResult(true);
       }
     }
@@ -155,7 +148,7 @@ export default function Home() {
       if (!coords) {
         fetchSearch(destination, userLoc.latitude, userLoc.longitude)
           .then((resp) => setSearchResults(resp.data))
-          .catch((e) => toast.error(e.error));
+          .catch((e) => toast.error(e.message));
         setShowResult(true);
       }
     }
@@ -194,6 +187,7 @@ export default function Home() {
   ) => {
     if (!sourceLoc || !destinationLoc) {
       toast.error("Please select both source and destination");
+      return;
     }
 
     e.preventDefault();
@@ -283,9 +277,6 @@ export default function Home() {
     e: MouseEvent<HTMLButtonElement, MouseEvent>,
     isSource: boolean,
   ) => {
-    if (!userLoc) {
-      toast.error("Please select both source and destination");
-    }
     try {
       const resp = await fetchReverseGeocoding({
         lat: userLoc.latitude,
@@ -535,37 +526,36 @@ export default function Home() {
   useEffect(() => {
     const usedRoute = routeData?.[activeRoute];
 
-    if (matchedGpsLoc) {
+    if (matchedGpsLoc && usedRoute) {
       // update current driving direction & distance from turn point
-      const usedRouteDirections = usedRoute!.driving_directions;
+      const usedRouteDirections = usedRoute.driving_directions;
       const directionsIndex = getCurrentUserDirectionIndex({
         snappedEdgeID: snappedEdgeID,
-        drivingDirections: usedRouteDirections!,
+        drivingDirections: usedRouteDirections,
       });
       setCurrentDirectionIndex(directionsIndex);
 
       setDistanceFromNextTurnPoint(
         getDistanceFromUserToNextTurn({
           matchedGpsLoc: matchedGpsLoc,
-          nextTurnPoint: usedRouteDirections![directionsIndex].turn_point,
+          nextTurnPoint: usedRouteDirections[directionsIndex].turn_point,
         }) * 1000.0,
       );
     }
 
-    // const firstRouteEdgeID = usedRoute?.driving_directions[0].edge_ids[0];
-    const firstRouteEdgeID = 0;
+    const firstRouteEdgeID = usedRoute?.driving_directions[0]?.edge_ids[0];
     if (snappedEdgeID == firstRouteEdgeID || mapMatchStep.current == 1) {
       // skip re-route logic if current user location == source loc.
       return;
     }
 
-    if (matchedGpsLoc) {
+    if (matchedGpsLoc && usedRoute) {
+      const selectedRoute = usedRoute;
       // perform a re-route if the user's current location (snapped edge id) is outside the preferred route
       (async () => {
         const isOffTheRoute = isUserOffTheRoute({
           snappedEdgeID: snappedEdgeID,
-
-          routeData: usedRoute!,
+          routeData: selectedRoute,
         });
         if (isOffTheRoute) {
           // driver keluar jalur selected route -> do re-routing
@@ -604,12 +594,21 @@ export default function Home() {
               ]);
             }
           } catch (e: any) {
-            toast.error("Failed to fetch route (re-routing): ", e);
+            toast.error(
+              `Failed to fetch route (re-routing): ${e?.message ?? "Unknown error"}`,
+            );
           }
         }
       })();
     }
-  }, [matchedGpsLoc, snappedEdgeID, routeData]);
+  }, [
+    matchedGpsLoc,
+    snappedEdgeID,
+    routeData,
+    activeRoute,
+    destinationLoc,
+    alternativeRoutesLineData,
+  ]);
 
   const handleSetRouteDataCRP = (data: RouteCRPResponse[]) => {
     setRouteData(data);
