@@ -102,7 +102,7 @@ export function SearchBox({
                   name: `${coords.lat}, ${coords.lon}`,
                   lat: coords.lat,
                   lon: coords.lon,
-                  type: "source",
+                  type: "destination",
                   address: "",
                 },
                 distance: 0,
