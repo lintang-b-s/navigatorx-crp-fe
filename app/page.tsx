@@ -31,6 +31,11 @@ import { useDeviceOrientation } from "./hook";
 
 const INVALID_LAT = 91;
 const INVALID_LON = 181;
+const RAD_TO_DEG = 180 / Math.PI;
+
+const normalizeBearing = (bearing: number) => {
+  return ((bearing % 360) + 360) % 360;
+};
 
 export default function Home() {
   // real-time map matching states
@@ -41,6 +46,7 @@ export default function Home() {
   const [routeStarted, setRouteStarted] = useState(false);
   const [matchedGpsLoc, setMatchedGpsLoc] = useState<Coord>();
   const [gpsHeading, setGpsHeading] = useState<number>(0); // bearing (user heading angle from North)
+  const [matchedHeading, setMatchedHeading] = useState<number>();
   const [distanceFromNextTurnPoint, setDistanceFromNextTurnPoint] =
     useState<number>(0); // in meter
   const [currentDirectionIndex, setCurrentDirectionIndex] = useState(1);
@@ -378,6 +384,7 @@ export default function Home() {
             speedMeanK.current = 500.0;
             speedStdK.current = 500.0;
             lastBearing.current = 0.0;
+            setMatchedHeading(undefined);
             return;
           }
 
@@ -396,6 +403,9 @@ export default function Home() {
           speedMeanK.current = resp.data.speed_mean_k;
           speedStdK.current = resp.data.speed_std_k;
           lastBearing.current = resp.data.edge_initial_bearing;
+          setMatchedHeading(
+            normalizeBearing(resp.data.edge_initial_bearing * RAD_TO_DEG),
+          );
 
           setMatchedGpsLoc(resp.data.matched_gps_point.matched_coord);
           setSnappedEdgeID(resp.data.matched_gps_point.edge_id);
@@ -526,6 +536,7 @@ export default function Home() {
       prevGps.current = undefined;
       deadReckoning.current = false;
       setMatchedGpsLoc(undefined);
+      setMatchedHeading(undefined);
       setSnappedEdgeID(0);
     }
   }, [routeStarted]);
@@ -643,7 +654,9 @@ export default function Home() {
         onSelectDestination={onSelectDestination}
         routeStarted={routeStarted}
         matchedGpsLoc={matchedGpsLoc}
-        gpsHeading={gpsHeading}
+        userHeading={
+          matchedHeading !== undefined ? matchedHeading : normalizeBearing(gpsHeading)
+        }
       />
       <Router
         sourceSearchActive={handleFocusSourceSearch}

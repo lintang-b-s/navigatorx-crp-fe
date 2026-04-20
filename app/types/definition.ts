@@ -58,7 +58,7 @@ export type MapComponentProps = {
   onSelectDestination: (place: Place) => void;
   matchedGpsLoc: Coord | undefined;
   routeStarted: boolean;
-  gpsHeading: number;
+  userHeading: number;
 };
 
 export type LineData = {
