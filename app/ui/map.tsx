@@ -127,9 +127,9 @@ export function MapComponent({
 
   const zoomBasedTurnScale = Math.max(
     0,
-    Math.min(1, (viewState.zoom - 12) / (16 - 12)),
+    Math.min(1, (viewState.zoom - 10) / (17 - 10)),
   );
-  const turnIconSize = 28 * zoomBasedTurnScale;
+  const turnIconSize = 40 * zoomBasedTurnScale;
   const turnOpacity = ACTIVE_ROUTE_OPACITY * zoomBasedTurnScale;
 
   return (
@@ -214,9 +214,9 @@ export function MapComponent({
             type="line"
             source="polyline-source"
               paint={{
-                "line-color": "#D5ACFF",
+                "line-color": ACTIVE_ROUTE_COLOR,
                 "line-width": 4,
-                "line-opacity": 0.7,
+                "line-opacity": 0.35,
               }}
             />
           </Source>
@@ -246,9 +246,9 @@ export function MapComponent({
                   type="line"
                   source={`polyline-source-${index}`}
                   paint={{
-                    "line-color": "#D5ACFF",
+                    "line-color": ACTIVE_ROUTE_COLOR,
                     "line-width": 3,
-                    "line-opacity": 0.6,
+                    "line-opacity": 0.3,
                   }}
                 />
               </Source>
@@ -489,6 +489,7 @@ function getTurnIconDirection(turnType: string): string {
   return "";
 }
 
+
 function findClosestPointOnRoute(
   lon: number,
   lat: number,
@@ -498,11 +499,14 @@ function findClosestPointOnRoute(
     return [lon, lat];
   }
 
+  const targetMercY = latToMercator(lat);
   let minDistance = Number.POSITIVE_INFINITY;
   let closestPoint: [number, number] = [lon, lat];
 
   coordinates.forEach((coord) => {
-    const distance = Math.hypot(coord[0] - lon, coord[1] - lat);
+    const dx = coord[0] - lon;
+    const dy = latToMercator(coord[1]) - targetMercY;
+    const distance = Math.hypot(dx, dy);
     if (distance < minDistance) {
       minDistance = distance;
       closestPoint = [coord[0], coord[1]];
