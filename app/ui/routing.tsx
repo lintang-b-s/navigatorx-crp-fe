@@ -52,6 +52,18 @@ export function Router(props: RouterProps) {
     }
   }, [props.isSourceFocused, props.isDestinationFocused]);
 
+  useEffect(() => {
+    if (!props.routeDataCRP || props.routeDataCRP.length === 0) {
+      setShowDirections(false);
+      props.handleDirectionActive(false);
+      props.handleSetNextTurnIndex(-1);
+    }
+  }, [
+    props.routeDataCRP,
+    props.handleDirectionActive,
+    props.handleSetNextTurnIndex,
+  ]);
+
   const safeActiveRoute =
     props.routeDataCRP && props.activeRoute < props.routeDataCRP.length
       ? props.activeRoute
