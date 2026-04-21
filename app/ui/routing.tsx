@@ -23,6 +23,12 @@ import { AiOutlineThunderbolt } from "react-icons/ai";
 
 import { FaCheck } from "react-icons/fa";
 
+const formatMinutes = (minutes: number): string => {
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 1,
+  }).format(minutes);
+};
+
 export function Router(props: RouterProps) {
   const [isSourceFocused, setIsSourceFocused] = useState(false);
   const [showDirections, setShowDirections] = useState(false);
@@ -46,6 +52,23 @@ export function Router(props: RouterProps) {
     }
   }, [props.isSourceFocused, props.isDestinationFocused]);
 
+  useEffect(() => {
+    if (!props.routeDataCRP || props.routeDataCRP.length === 0) {
+      setShowDirections(false);
+      props.handleDirectionActive(false);
+      props.handleSetNextTurnIndex(-1);
+    }
+  }, [
+    props.routeDataCRP,
+    props.handleDirectionActive,
+    props.handleSetNextTurnIndex,
+  ]);
+
+  const safeActiveRoute =
+    props.routeDataCRP && props.activeRoute < props.routeDataCRP.length
+      ? props.activeRoute
+      : 0;
+
   return (
     <>
       {props.routeDataCRP?.length! > 0 &&
@@ -54,7 +77,7 @@ export function Router(props: RouterProps) {
         <>
           {showRouteResultMobile(
             props,
-            props.activeRoute,
+            safeActiveRoute,
             props.handleRouteClick,
             props.routeStarted,
             props.handleStartRoute,
@@ -64,7 +87,7 @@ export function Router(props: RouterProps) {
           )}
           {showRouteResult(
             props,
-            props.activeRoute,
+            safeActiveRoute,
             props.handleRouteClick,
             showDirections,
             handleShowDirections,
@@ -73,7 +96,7 @@ export function Router(props: RouterProps) {
           )}
           {showRouteEtaAndDistance(
             props,
-            props.activeRoute,
+            safeActiveRoute,
             props.routeStarted,
             props.handleStartRoute,
             nowTime,
@@ -127,7 +150,11 @@ export function Router(props: RouterProps) {
             </div>
 
             <div className="flex flex-col items-center gap-2  ">
-              <Button className="" onClick={(e) => props.onHandleGetRoutes(e)}>
+              <Button
+                className=""
+                onClick={(e) => props.onHandleGetRoutes(e)}
+                disabled={props.isFetchingRoutes}
+              >
                 <CiRoute size={30} />
               </Button>
 
@@ -287,7 +314,7 @@ function showRouteResultMobile(
                     </p>
                   </div>
                   <p className="text-sm font-light">
-                    {direction.cumulativeEta.toPrecision(2)} menit (
+                    {formatMinutes(direction.cumulativeEta)} menit (
                     {Math.round(direction.cumulativeDistance)} m)
                   </p>
                 </div>
@@ -501,7 +528,11 @@ function showRouteResult(
           </div>
 
           <div className="flex flex-col items-center gap-2  ">
-            <Button className="" onClick={(e) => props.onHandleGetRoutes(e)}>
+            <Button
+              className=""
+              onClick={(e) => props.onHandleGetRoutes(e)}
+              disabled={props.isFetchingRoutes}
+            >
               <CiRoute size={30} />
             </Button>
 
@@ -688,7 +719,7 @@ function showRouteDirectionsComponent(
               </p>
             </div>
             <p className="text-sm font-light">
-              {direction.cumulativeEta.toPrecision(2)} menit (
+              {formatMinutes(direction.cumulativeEta)} menit (
               {Math.round(direction.cumulativeDistance)} m)
             </p>
           </div>

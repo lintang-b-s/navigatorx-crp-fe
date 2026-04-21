@@ -16,6 +16,7 @@ export type RouterProps = {
   sourceSearchActive: (val: boolean) => void;
   destinationSearchActive: (val: boolean) => void;
   onHandleGetRoutes: (e: any) => void;
+  isFetchingRoutes: boolean;
   isSourceFocused: boolean;
   isDestinationFocused: boolean;
   onHandleReverseGeocoding: (e: any, isSource: boolean) => void;
@@ -57,7 +58,7 @@ export type MapComponentProps = {
   onSelectDestination: (place: Place) => void;
   matchedGpsLoc: Coord | undefined;
   routeStarted: boolean;
-  gpsHeading: number;
+  userHeading: number;
 };
 
 export type LineData = {

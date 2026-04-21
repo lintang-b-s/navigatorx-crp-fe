@@ -34,7 +34,7 @@ export function MapComponent({
   onSelectDestination,
   matchedGpsLoc,
   routeStarted,
-  gpsHeading,
+  userHeading,
 }: MapComponentProps) {
   const [contextMenuCoord, setContextMenuCoord] = useState<{
     lng: number;
@@ -61,6 +61,8 @@ export function MapComponent({
   }
 
   useEffect(() => {
+    const activeRouteData = routeDataCRP?.[activeRoute];
+
     if (routeStarted && matchedGpsLoc) {
       // update view state to user current matched gps location
       setViewState({
@@ -71,14 +73,15 @@ export function MapComponent({
       return;
     }
     if (isDirectionActive) {
+      if (!activeRouteData) {
+        return;
+      }
+
       if (activeRoute == 0) {
         let zoomLevel = 15;
-        if (routeDataCRP![0].distance > 7 && routeDataCRP![0].distance < 15) {
+        if (activeRouteData.distance > 7 && activeRouteData.distance < 15) {
           zoomLevel = 12;
-        } else if (
-          routeDataCRP![0].distance > 15 &&
-          routeDataCRP![0].distance < 70
-        ) {
+        } else if (activeRouteData.distance > 15 && activeRouteData.distance < 70) {
           zoomLevel = 10;
         }
         const midIndex = Math.floor(lineData!.geometry.coordinates.length / 2);
@@ -89,12 +92,9 @@ export function MapComponent({
         });
       } else {
         let zoomLevel = 15;
-        if (
-          routeDataCRP![activeRoute].distance > 7 &&
-          routeDataCRP![activeRoute].distance < 50
-        ) {
+        if (activeRouteData.distance > 7 && activeRouteData.distance < 50) {
           zoomLevel = 12;
-        } else if (routeDataCRP![activeRoute].distance > 50) {
+        } else if (activeRouteData.distance > 50) {
           zoomLevel = 10;
         }
         const midIndex = Math.floor(
@@ -137,20 +137,20 @@ export function MapComponent({
   ]);
 
   useEffect(() => {
-    if (nextTurnIndex != -1 && routeDataCRP) {
-      const turn = routeDataCRP[activeRoute].driving_directions[nextTurnIndex];
+    const turn = routeDataCRP?.[activeRoute]?.driving_directions?.[nextTurnIndex];
+    if (nextTurnIndex != -1 && turn) {
       setViewState({
         longitude: turn.turn_point.lon,
         latitude: turn.turn_point.lat,
         zoom: 17,
       });
     }
-  }, [nextTurnIndex]);
+  }, [nextTurnIndex, routeDataCRP, activeRoute]);
 
   return (
     <Map
       {...viewState}
-      bearing={routeStarted ? gpsHeading : 0}
+      bearing={routeStarted ? userHeading : 0}
       style={{ width: "100vw", height: "100vh" }}
       onMove={(evt) => setViewState(evt.viewState)}
       mapStyle="https://tiles.openfreemap.org/styles/liberty"
@@ -298,8 +298,7 @@ export function MapComponent({
       )}
 
       {isDirectionActive &&
-        routeDataCRP &&
-        routeDataCRP[activeRoute].driving_directions.map((turn, i) => {
+        routeDataCRP?.[activeRoute]?.driving_directions?.map((turn, i) => {
           const turnIcon = getTurnIconDirection(turn.turn_type);
 
           if (turnIcon == "") {
@@ -320,7 +319,7 @@ export function MapComponent({
                 height={30}
                 style={{
                   transform: `rotate(${
-                    (turn.turn_bearing * 180) / Math.PI - gpsHeading
+                    (turn.turn_bearing * 180) / Math.PI - userHeading
                   }deg)`,
                 }}
               />
@@ -360,7 +359,7 @@ export function MapComponent({
         <Marker
           latitude={matchedGpsLoc.lat}
           longitude={matchedGpsLoc.lon}
-          rotation={0}
+          rotation={userHeading - faLocationArrowDegree}
           anchor="center"
         >
           <div
