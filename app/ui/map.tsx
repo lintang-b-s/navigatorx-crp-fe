@@ -76,8 +76,6 @@ export function MapComponent({
   }
 
   useEffect(() => {
-    const activeRouteData = routeDataCRP?.[activeRoute];
-
     if (routeStarted && matchedGpsLoc) {
       // update view state to user current matched gps location
       setViewState({
@@ -87,68 +85,28 @@ export function MapComponent({
       });
       return;
     }
-    if (isDirectionActive) {
-      if (!activeRouteData) {
-        return;
-      }
+    const selectedCoordinates =
+      activeRoute === 0
+        ? lineData?.geometry.coordinates
+        : alternativeRoutes?.[activeRoute]?.geometry.coordinates;
 
-      if (activeRoute == 0) {
-        let zoomLevel = 15;
-        if (activeRouteData.distance > 7 && activeRouteData.distance < 15) {
-          zoomLevel = 12;
-        } else if (activeRouteData.distance > 15 && activeRouteData.distance < 70) {
-          zoomLevel = 10;
-        }
-        const midIndex = Math.floor(lineData!.geometry.coordinates.length / 2);
-        setViewState({
-          longitude: lineData!.geometry.coordinates[midIndex][0],
-          latitude: lineData!.geometry.coordinates[midIndex][1],
-          zoom: zoomLevel,
-        });
-      } else {
-        let zoomLevel = 15;
-        if (activeRouteData.distance > 7 && activeRouteData.distance < 50) {
-          zoomLevel = 12;
-        } else if (activeRouteData.distance > 50) {
-          zoomLevel = 10;
-        }
-        const midIndex = Math.floor(
-          alternativeRoutes![activeRoute].geometry.coordinates.length / 2,
-        );
-
-        setViewState({
-          longitude:
-            alternativeRoutes![activeRoute].geometry.coordinates[midIndex][0],
-          latitude:
-            alternativeRoutes![activeRoute].geometry.coordinates[midIndex][1],
-          zoom: zoomLevel,
-        });
-      }
-    } else if (lineData && routeDataCRP?.length! > 0) {
-      let zoomLevel = 15;
-      if (routeDataCRP![0].distance > 7 && routeDataCRP![0].distance < 15) {
-        zoomLevel = 12;
-      } else if (
-        routeDataCRP![0].distance > 15 &&
-        routeDataCRP![0].distance < 50
-      ) {
-        zoomLevel = 11;
-      } else if (routeDataCRP![0].distance > 50) {
-        zoomLevel = 10;
-      }
-      const midIndex = Math.floor(lineData!.geometry.coordinates.length / 2);
-      setViewState({
-        longitude: lineData!.geometry.coordinates[midIndex][0],
-        latitude: lineData!.geometry.coordinates[midIndex][1],
-        zoom: zoomLevel,
-      });
+    if (!selectedCoordinates || selectedCoordinates.length === 0) {
+      return;
     }
+
+    const fittedViewport = getRouteFittedViewState(selectedCoordinates);
+    setViewState((prev) => ({
+      ...prev,
+      ...fittedViewport,
+    }));
   }, [
     isDirectionActive,
     lineData,
     alternativeRoutes,
+    activeRoute,
     routeStarted,
     matchedGpsLoc,
+    routeDataCRP,
   ]);
 
   useEffect(() => {
@@ -552,4 +510,57 @@ function findClosestPointOnRoute(
   });
 
   return closestPoint;
+}
+
+function getRouteFittedViewState(coordinates: number[][]): {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+} {
+  const [minLon, minLat, maxLon, maxLat] = coordinates.reduce(
+    (acc, [lon, lat]) => [
+      Math.min(acc[0], lon),
+      Math.min(acc[1], lat),
+      Math.max(acc[2], lon),
+      Math.max(acc[3], lat),
+    ],
+    [
+      Number.POSITIVE_INFINITY,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ],
+  );
+
+  const centerLon = (minLon + maxLon) / 2;
+  const centerLat = (minLat + maxLat) / 2;
+
+  const mapWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
+  const mapHeight = typeof window !== "undefined" ? window.innerHeight : 768;
+  const padding = 120;
+
+  const safeWidth = Math.max(1, mapWidth - padding * 2);
+  const safeHeight = Math.max(1, mapHeight - padding * 2);
+
+  const lngDiff = Math.max(0.0001, maxLon - minLon);
+  const zoomLng = Math.log2((360 * safeWidth) / (lngDiff * 256));
+
+  const latFraction = Math.max(
+    0.0001,
+    (latToMercator(maxLat) - latToMercator(minLat)) / Math.PI,
+  );
+  const zoomLat = Math.log2(safeHeight / (256 * latFraction));
+
+  const zoom = Math.max(9, Math.min(16, Math.min(zoomLng, zoomLat)));
+
+  return {
+    longitude: centerLon,
+    latitude: centerLat,
+    zoom,
+  };
+}
+
+function latToMercator(lat: number): number {
+  const sin = Math.sin((lat * Math.PI) / 180);
+  return Math.log((1 + sin) / (1 - sin)) / 2;
 }
