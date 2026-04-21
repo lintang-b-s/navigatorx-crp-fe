@@ -21,6 +21,21 @@ import { IoLocationSharp } from "react-icons/io5";
 import { FaLocationArrow } from "react-icons/fa";
 
 const faLocationArrowDegree = 45.0; // in degrees
+const ACTIVE_ROUTE_COLOR = "#470DF9";
+const ACTIVE_ROUTE_OPACITY = 0.9;
+const ACTIVE_ROUTE_WIDTH_BY_ZOOM = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  10,
+  2,
+  13,
+  4,
+  15,
+  6,
+  17,
+  8,
+];
 
 export function MapComponent({
   lineData,
@@ -147,6 +162,18 @@ export function MapComponent({
     }
   }, [nextTurnIndex, routeDataCRP, activeRoute]);
 
+  const activeRouteCoordinates =
+    activeRoute === 0
+      ? lineData?.geometry.coordinates
+      : alternativeRoutes?.[activeRoute]?.geometry.coordinates;
+
+  const zoomBasedTurnScale = Math.max(
+    0,
+    Math.min(1, (viewState.zoom - 12) / (16 - 12)),
+  );
+  const turnIconSize = 28 * zoomBasedTurnScale;
+  const turnOpacity = ACTIVE_ROUTE_OPACITY * zoomBasedTurnScale;
+
   return (
     <Map
       {...viewState}
@@ -228,12 +255,13 @@ export function MapComponent({
             id="polyline-layer"
             type="line"
             source="polyline-source"
-            paint={{
-              "line-color": "#D5ACFF",
-              "line-width": 5,
-            }}
-          />
-        </Source>
+              paint={{
+                "line-color": "#D5ACFF",
+                "line-width": 4,
+                "line-opacity": 0.7,
+              }}
+            />
+          </Source>
       )}
 
       {!isDirectionActive &&
@@ -261,7 +289,8 @@ export function MapComponent({
                   source={`polyline-source-${index}`}
                   paint={{
                     "line-color": "#D5ACFF",
-                    "line-width": 4,
+                    "line-width": 3,
+                    "line-opacity": 0.6,
                   }}
                 />
               </Source>
@@ -289,8 +318,9 @@ export function MapComponent({
               type="line"
               source="active-route-source"
               paint={{
-                "line-color": "#6111C1",
-                "line-width": 5,
+                "line-color": ACTIVE_ROUTE_COLOR,
+                "line-width": ACTIVE_ROUTE_WIDTH_BY_ZOOM as any,
+                "line-opacity": ACTIVE_ROUTE_OPACITY,
               }}
             />
           </Source>
@@ -300,24 +330,29 @@ export function MapComponent({
       {isDirectionActive &&
         routeDataCRP?.[activeRoute]?.driving_directions?.map((turn, i) => {
           const turnIcon = getTurnIconDirection(turn.turn_type);
+          const turnPointOnPolyline = findClosestPointOnRoute(
+            turn.turn_point.lon,
+            turn.turn_point.lat,
+            activeRouteCoordinates,
+          );
 
-          if (turnIcon == "") {
+          if (turnIcon == "" || turnIconSize <= 0) {
             return null;
           }
           return (
             <Marker
               key={`turn-${i}`}
-              longitude={turn.turn_point.lon}
-              latitude={turn.turn_point.lat}
+              longitude={turnPointOnPolyline[0]}
+              latitude={turnPointOnPolyline[1]}
               anchor="center"
-              scale={0.55}
             >
               <Image
                 src={turnIcon}
                 alt="turn icon"
-                width={30}
-                height={30}
+                width={turnIconSize}
+                height={turnIconSize}
                 style={{
+                  opacity: turnOpacity,
                   transform: `rotate(${
                     (turn.turn_bearing * 180) / Math.PI - userHeading
                   }deg)`,
@@ -347,8 +382,9 @@ export function MapComponent({
               type="line"
               source="polyline-source"
               paint={{
-                "line-color": "#6111C1",
-                "line-width": 5,
+                "line-color": ACTIVE_ROUTE_COLOR,
+                "line-width": ACTIVE_ROUTE_WIDTH_BY_ZOOM as any,
+                "line-opacity": ACTIVE_ROUTE_OPACITY,
               }}
             />
           </Source>
@@ -472,25 +508,48 @@ export function MapComponent({
 function getTurnIconDirection(turnType: string): string {
   switch (turnType) {
     case "TURN_RIGHT":
-      return "/icons2/turn-right.png";
+      return "/icons_white/turn_right.png";
     case "TURN_SHARP_RIGHT":
-      return "/icons2/turn-right.png";
+      return "/icons_white/turn_right.png";
     case "TURN_LEFT":
-      return "/icons2/turn-left.png";
+      return "/icons_white/turn_left.png";
     case "TURN_SHARP_LEFT":
-      return "/icons2/turn-left.png";
+      return "/icons_white/turn_left.png";
     case "":
-      return "/icons2/straight.png";
+      return "";
     case "TURN_SLIGHT_RIGHT":
-      return "/icons2/turn-slight-right.png";
+      return "/icons_white/turn_slight_right.png";
     case "TURN_SLIGHT_LEFT":
-      return "/icons2/turn-slight-left.png";
+      return "/icons_white/turn_slight_left.png";
     case "KEEP_RIGHT":
-      return "/icons2/turn-slight-right.png";
+      return "/icons_white/fork_right.png";
     case "KEEP_LEFT":
-      return "/icons2/turn-slight-left.png";
+      return "/icons_white/fork_left.png";
     case "MERGE_ONTO":
-      return `/icons2/merge_onto.png`;
+      return `/icons_white/merge_onto.png`;
   }
   return "";
+}
+
+function findClosestPointOnRoute(
+  lon: number,
+  lat: number,
+  coordinates?: number[][],
+): [number, number] {
+  if (!coordinates || coordinates.length === 0) {
+    return [lon, lat];
+  }
+
+  let minDistance = Number.POSITIVE_INFINITY;
+  let closestPoint: [number, number] = [lon, lat];
+
+  coordinates.forEach((coord) => {
+    const distance = Math.hypot(coord[0] - lon, coord[1] - lat);
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestPoint = [coord[0], coord[1]];
+    }
+  });
+
+  return closestPoint;
 }
