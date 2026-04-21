@@ -21,6 +21,21 @@ import { IoLocationSharp } from "react-icons/io5";
 import { FaLocationArrow } from "react-icons/fa";
 
 const faLocationArrowDegree = 45.0; // in degrees
+const ACTIVE_ROUTE_COLOR = "#470DF9";
+const ACTIVE_ROUTE_OPACITY = 0.9;
+const ACTIVE_ROUTE_WIDTH_BY_ZOOM = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  10,
+  2,
+  13,
+  4,
+  15,
+  6,
+  17,
+  8,
+];
 
 export function MapComponent({
   lineData,
@@ -61,8 +76,6 @@ export function MapComponent({
   }
 
   useEffect(() => {
-    const activeRouteData = routeDataCRP?.[activeRoute];
-
     if (routeStarted && matchedGpsLoc) {
       // update view state to user current matched gps location
       setViewState({
@@ -72,68 +85,28 @@ export function MapComponent({
       });
       return;
     }
-    if (isDirectionActive) {
-      if (!activeRouteData) {
-        return;
-      }
+    const selectedCoordinates =
+      activeRoute === 0
+        ? lineData?.geometry.coordinates
+        : alternativeRoutes?.[activeRoute]?.geometry.coordinates;
 
-      if (activeRoute == 0) {
-        let zoomLevel = 15;
-        if (activeRouteData.distance > 7 && activeRouteData.distance < 15) {
-          zoomLevel = 12;
-        } else if (activeRouteData.distance > 15 && activeRouteData.distance < 70) {
-          zoomLevel = 10;
-        }
-        const midIndex = Math.floor(lineData!.geometry.coordinates.length / 2);
-        setViewState({
-          longitude: lineData!.geometry.coordinates[midIndex][0],
-          latitude: lineData!.geometry.coordinates[midIndex][1],
-          zoom: zoomLevel,
-        });
-      } else {
-        let zoomLevel = 15;
-        if (activeRouteData.distance > 7 && activeRouteData.distance < 50) {
-          zoomLevel = 12;
-        } else if (activeRouteData.distance > 50) {
-          zoomLevel = 10;
-        }
-        const midIndex = Math.floor(
-          alternativeRoutes![activeRoute].geometry.coordinates.length / 2,
-        );
-
-        setViewState({
-          longitude:
-            alternativeRoutes![activeRoute].geometry.coordinates[midIndex][0],
-          latitude:
-            alternativeRoutes![activeRoute].geometry.coordinates[midIndex][1],
-          zoom: zoomLevel,
-        });
-      }
-    } else if (lineData && routeDataCRP?.length! > 0) {
-      let zoomLevel = 15;
-      if (routeDataCRP![0].distance > 7 && routeDataCRP![0].distance < 15) {
-        zoomLevel = 12;
-      } else if (
-        routeDataCRP![0].distance > 15 &&
-        routeDataCRP![0].distance < 50
-      ) {
-        zoomLevel = 11;
-      } else if (routeDataCRP![0].distance > 50) {
-        zoomLevel = 10;
-      }
-      const midIndex = Math.floor(lineData!.geometry.coordinates.length / 2);
-      setViewState({
-        longitude: lineData!.geometry.coordinates[midIndex][0],
-        latitude: lineData!.geometry.coordinates[midIndex][1],
-        zoom: zoomLevel,
-      });
+    if (!selectedCoordinates || selectedCoordinates.length === 0) {
+      return;
     }
+
+    const fittedViewport = getRouteFittedViewState(selectedCoordinates);
+    setViewState((prev) => ({
+      ...prev,
+      ...fittedViewport,
+    }));
   }, [
     isDirectionActive,
     lineData,
     alternativeRoutes,
+    activeRoute,
     routeStarted,
     matchedGpsLoc,
+    routeDataCRP,
   ]);
 
   useEffect(() => {
@@ -146,6 +119,18 @@ export function MapComponent({
       });
     }
   }, [nextTurnIndex, routeDataCRP, activeRoute]);
+
+  const activeRouteCoordinates =
+    activeRoute === 0
+      ? lineData?.geometry.coordinates
+      : alternativeRoutes?.[activeRoute]?.geometry.coordinates;
+
+  const zoomBasedTurnScale = Math.max(
+    0,
+    Math.min(1, (viewState.zoom - 10) / (17 - 10)),
+  );
+  const turnIconSize = 40 * zoomBasedTurnScale;
+  const turnOpacity = ACTIVE_ROUTE_OPACITY * zoomBasedTurnScale;
 
   return (
     <Map
@@ -228,12 +213,13 @@ export function MapComponent({
             id="polyline-layer"
             type="line"
             source="polyline-source"
-            paint={{
-              "line-color": "#D5ACFF",
-              "line-width": 5,
-            }}
-          />
-        </Source>
+              paint={{
+                "line-color": ACTIVE_ROUTE_COLOR,
+                "line-width": 4,
+                "line-opacity": 0.35,
+              }}
+            />
+          </Source>
       )}
 
       {!isDirectionActive &&
@@ -260,8 +246,9 @@ export function MapComponent({
                   type="line"
                   source={`polyline-source-${index}`}
                   paint={{
-                    "line-color": "#D5ACFF",
-                    "line-width": 4,
+                    "line-color": ACTIVE_ROUTE_COLOR,
+                    "line-width": 3,
+                    "line-opacity": 0.3,
                   }}
                 />
               </Source>
@@ -289,8 +276,9 @@ export function MapComponent({
               type="line"
               source="active-route-source"
               paint={{
-                "line-color": "#6111C1",
-                "line-width": 5,
+                "line-color": ACTIVE_ROUTE_COLOR,
+                "line-width": ACTIVE_ROUTE_WIDTH_BY_ZOOM as any,
+                "line-opacity": ACTIVE_ROUTE_OPACITY,
               }}
             />
           </Source>
@@ -300,24 +288,29 @@ export function MapComponent({
       {isDirectionActive &&
         routeDataCRP?.[activeRoute]?.driving_directions?.map((turn, i) => {
           const turnIcon = getTurnIconDirection(turn.turn_type);
+          const turnPointOnPolyline = findClosestPointOnRoute(
+            turn.turn_point.lon,
+            turn.turn_point.lat,
+            activeRouteCoordinates,
+          );
 
-          if (turnIcon == "") {
+          if (turnIcon == "" || turnIconSize <= 0) {
             return null;
           }
           return (
             <Marker
               key={`turn-${i}`}
-              longitude={turn.turn_point.lon}
-              latitude={turn.turn_point.lat}
+              longitude={turnPointOnPolyline[0]}
+              latitude={turnPointOnPolyline[1]}
               anchor="center"
-              scale={0.55}
             >
               <Image
                 src={turnIcon}
                 alt="turn icon"
-                width={30}
-                height={30}
+                width={turnIconSize}
+                height={turnIconSize}
                 style={{
+                  opacity: turnOpacity,
                   transform: `rotate(${
                     (turn.turn_bearing * 180) / Math.PI - userHeading
                   }deg)`,
@@ -347,8 +340,9 @@ export function MapComponent({
               type="line"
               source="polyline-source"
               paint={{
-                "line-color": "#6111C1",
-                "line-width": 5,
+                "line-color": ACTIVE_ROUTE_COLOR,
+                "line-width": ACTIVE_ROUTE_WIDTH_BY_ZOOM as any,
+                "line-opacity": ACTIVE_ROUTE_OPACITY,
               }}
             />
           </Source>
@@ -472,25 +466,105 @@ export function MapComponent({
 function getTurnIconDirection(turnType: string): string {
   switch (turnType) {
     case "TURN_RIGHT":
-      return "/icons2/turn-right.png";
+      return "/icons_white/turn_right.png";
     case "TURN_SHARP_RIGHT":
-      return "/icons2/turn-right.png";
+      return "/icons_white/turn_right.png";
     case "TURN_LEFT":
-      return "/icons2/turn-left.png";
+      return "/icons_white/turn_left.png";
     case "TURN_SHARP_LEFT":
-      return "/icons2/turn-left.png";
-    case "":
-      return "/icons2/straight.png";
+      return "/icons_white/turn_left.png";
+    case "CONTINUE_ONTO":
+      return "/icons_white/straight.png";;
     case "TURN_SLIGHT_RIGHT":
-      return "/icons2/turn-slight-right.png";
+      return "/icons_white/turn_slight_right.png";
     case "TURN_SLIGHT_LEFT":
-      return "/icons2/turn-slight-left.png";
+      return "/icons_white/turn_slight_left.png";
     case "KEEP_RIGHT":
-      return "/icons2/turn-slight-right.png";
+      return "/icons_white/fork_right.png";
     case "KEEP_LEFT":
-      return "/icons2/turn-slight-left.png";
+      return "/icons_white/fork_left.png";
     case "MERGE_ONTO":
-      return `/icons2/merge_onto.png`;
+      return `/icons_white/merge_onto.png`;
   }
   return "";
+}
+
+
+function findClosestPointOnRoute(
+  lon: number,
+  lat: number,
+  coordinates?: number[][],
+): [number, number] {
+  if (!coordinates || coordinates.length === 0) {
+    return [lon, lat];
+  }
+
+  const targetMercY = latToMercator(lat);
+  let minDistance = Number.POSITIVE_INFINITY;
+  let closestPoint: [number, number] = [lon, lat];
+
+  coordinates.forEach((coord) => {
+    const dx = coord[0] - lon;
+    const dy = latToMercator(coord[1]) - targetMercY;
+    const distance = Math.hypot(dx, dy);
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestPoint = [coord[0], coord[1]];
+    }
+  });
+
+  return closestPoint;
+}
+
+function getRouteFittedViewState(coordinates: number[][]): {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+} {
+  const [minLon, minLat, maxLon, maxLat] = coordinates.reduce(
+    (acc, [lon, lat]) => [
+      Math.min(acc[0], lon),
+      Math.min(acc[1], lat),
+      Math.max(acc[2], lon),
+      Math.max(acc[3], lat),
+    ],
+    [
+      Number.POSITIVE_INFINITY,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ],
+  );
+
+  const centerLon = (minLon + maxLon) / 2;
+  const centerLat = (minLat + maxLat) / 2;
+
+  const mapWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
+  const mapHeight = typeof window !== "undefined" ? window.innerHeight : 768;
+  const padding = 120;
+
+  const safeWidth = Math.max(1, mapWidth - padding * 2);
+  const safeHeight = Math.max(1, mapHeight - padding * 2);
+
+  const lngDiff = Math.max(0.0001, maxLon - minLon);
+  const zoomLng = Math.log2((360 * safeWidth) / (lngDiff * 256));
+
+  const latFraction = Math.max(
+    0.0001,
+    (latToMercator(maxLat) - latToMercator(minLat)) / Math.PI,
+  );
+  const zoomLat = Math.log2(safeHeight / (256 * latFraction));
+
+  const zoom = Math.max(9, Math.min(16, Math.min(zoomLng, zoomLat)));
+
+  return {
+    longitude: centerLon,
+    latitude: centerLat,
+    zoom,
+  };
+}
+
+function latToMercator(lat: number): number {
+  const sin = Math.sin((lat * Math.PI) / 180);
+  return Math.log((1 + sin) / (1 - sin)) / 2;
 }
