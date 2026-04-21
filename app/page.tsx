@@ -642,6 +642,17 @@ export default function Home() {
     }
   }, [routeData]);
 
+  useEffect(() => {
+    if (!routeData || routeData.length === 0) {
+      setActiveRoute(0);
+      return;
+    }
+
+    if (activeRoute >= routeData.length) {
+      setActiveRoute(0);
+    }
+  }, [routeData, activeRoute]);
+
   return (
     <main className="flex relative  w-full overflow-hidden">
       <MapComponent

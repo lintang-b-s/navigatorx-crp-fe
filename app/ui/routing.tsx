@@ -52,6 +52,23 @@ export function Router(props: RouterProps) {
     }
   }, [props.isSourceFocused, props.isDestinationFocused]);
 
+  useEffect(() => {
+    if (!props.routeDataCRP || props.routeDataCRP.length === 0) {
+      setShowDirections(false);
+      props.handleDirectionActive(false);
+      props.handleSetNextTurnIndex(-1);
+    }
+  }, [
+    props.routeDataCRP,
+    props.handleDirectionActive,
+    props.handleSetNextTurnIndex,
+  ]);
+
+  const safeActiveRoute =
+    props.routeDataCRP && props.activeRoute < props.routeDataCRP.length
+      ? props.activeRoute
+      : 0;
+
   return (
     <>
       {props.routeDataCRP?.length! > 0 &&
@@ -60,7 +77,7 @@ export function Router(props: RouterProps) {
         <>
           {showRouteResultMobile(
             props,
-            props.activeRoute,
+            safeActiveRoute,
             props.handleRouteClick,
             props.routeStarted,
             props.handleStartRoute,
@@ -70,7 +87,7 @@ export function Router(props: RouterProps) {
           )}
           {showRouteResult(
             props,
-            props.activeRoute,
+            safeActiveRoute,
             props.handleRouteClick,
             showDirections,
             handleShowDirections,
@@ -79,7 +96,7 @@ export function Router(props: RouterProps) {
           )}
           {showRouteEtaAndDistance(
             props,
-            props.activeRoute,
+            safeActiveRoute,
             props.routeStarted,
             props.handleStartRoute,
             nowTime,
