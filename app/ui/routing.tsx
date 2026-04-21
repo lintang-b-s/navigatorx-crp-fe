@@ -743,7 +743,7 @@ function getTurnIcon(turnType: string, directory: string): string {
       return `/${directory}/u_turn_right.png`;
     case "U_TURN_LEFT":
       return `/${directory}/u_turn_left.png`;
-    case "":
+    case "CONTINUE_ONTO":
       return `/${directory}/straight.png`;
     case "TURN_SLIGHT_RIGHT":
       return `/${directory}/turn_slight_right.png`;
@@ -757,6 +757,8 @@ function getTurnIcon(turnType: string, directory: string): string {
       return `/${directory}/fork_right.png`;
     case "MERGE_ONTO":
       return `/${directory}/merge_onto.png`;
+    case "":
+      return `/${directory}/straight.png`;
   }
   return "";
 }

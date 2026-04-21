@@ -473,8 +473,8 @@ function getTurnIconDirection(turnType: string): string {
       return "/icons_white/turn_left.png";
     case "TURN_SHARP_LEFT":
       return "/icons_white/turn_left.png";
-    case "":
-      return "";
+    case "CONTINUE_ONTO":
+      return "/icons_white/straight.png";;
     case "TURN_SLIGHT_RIGHT":
       return "/icons_white/turn_slight_right.png";
     case "TURN_SLIGHT_LEFT":
