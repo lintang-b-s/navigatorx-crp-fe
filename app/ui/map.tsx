@@ -298,8 +298,7 @@ export function MapComponent({
       )}
 
       {isDirectionActive &&
-        routeDataCRP &&
-        routeDataCRP[activeRoute].driving_directions.map((turn, i) => {
+        routeDataCRP?.[activeRoute]?.driving_directions?.map((turn, i) => {
           const turnIcon = getTurnIconDirection(turn.turn_type);
 
           if (turnIcon == "") {
