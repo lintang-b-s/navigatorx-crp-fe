@@ -13,12 +13,14 @@ import {
 } from "@vis.gl/react-maplibre";
 // @ts-ignore
 import "maplibre-gl/dist/maplibre-gl.css"; // See notes below
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { LineData, MapComponentProps } from "../types/definition";
 import Image from "next/image";
 import { IoLocationSharp } from "react-icons/io5";
 import { FaLocationArrow } from "react-icons/fa";
+import polyline from "@mapbox/polyline";
+import { haversineDistance } from "../lib/util";
 
 const faLocationArrowDegree = 45.0; // in degrees
 const ACTIVE_ROUTE_COLOR = "#470DF9";
@@ -37,7 +39,8 @@ const ACTIVE_ROUTE_WIDTH_BY_ZOOM = [
   8,
 ];
 
-export function MapComponent({
+
+export const MapComponent = React.memo(function MapComponent({
   lineData,
   onUserLocationUpdateHandler,
   alternativeRoutes,
@@ -50,17 +53,58 @@ export function MapComponent({
   matchedGpsLoc,
   routeStarted,
   userHeading,
+  onMapClick,
 }: MapComponentProps) {
   const [contextMenuCoord, setContextMenuCoord] = useState<{
     lng: number;
     lat: number;
   } | null>(null);
 
+  const [boundingBoxGeoJSON, setBoundingBoxGeoJSON] = useState<any>(null);
+
   const [viewState, setViewState] = React.useState({
     longitude: 110.37432,
     latitude: -7.78787,
     zoom: 13,
   });
+
+  useEffect(() => {
+    const fetchBoundingBox = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/boundingBox`);
+        const json = await res.json();
+        if (json && json.data) {
+          const { min_lat, min_lon, max_lat, max_lon } = json.data;
+          setBoundingBoxGeoJSON({
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [min_lon, min_lat],
+                [max_lon, min_lat],
+                [max_lon, max_lat],
+                [min_lon, max_lat],
+                [min_lon, min_lat],
+              ],
+            },
+            properties: {},
+          });
+          
+          const centerLon = (min_lon + max_lon) / 2;
+          const centerLat = (min_lat + max_lat) / 2;
+          setViewState(prev => ({
+            ...prev,
+            longitude: centerLon,
+            latitude: centerLat
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to fetch bounding box", err);
+      }
+    };
+    fetchBoundingBox();
+  }, []);
+
 
   const [touchStartTime, setTouchStartTime] = useState<number | null>(null);
 
@@ -78,11 +122,13 @@ export function MapComponent({
   useEffect(() => {
     if (routeStarted && matchedGpsLoc) {
       // update view state to user current matched gps location
-      setViewState({
+      setViewState((prev) => ({
+        ...prev,
         longitude: matchedGpsLoc!.lon,
         latitude: matchedGpsLoc!.lat,
         zoom: 16,
-      });
+        bearing: userHeading,
+      }));
       return;
     }
     const selectedCoordinates =
@@ -132,6 +178,47 @@ export function MapComponent({
   const turnIconSize = 40 * zoomBasedTurnScale;
   const turnOpacity = ACTIVE_ROUTE_OPACITY * zoomBasedTurnScale;
 
+  // Memoize GeoJSON data objects so MapLibre doesn't re-parse identical data
+  const spRouteGeoJSON = useMemo(() => {
+    if (!lineData) return null;
+    return {
+      type: "Feature" as const,
+      geometry: {
+        type: "LineString" as const,
+        coordinates: lineData.geometry.coordinates,
+      },
+      properties: {},
+    };
+  }, [lineData]);
+
+  const activeRouteGeoJSON = useMemo(() => {
+    if (activeRoute === 0 || !alternativeRoutes?.[activeRoute]) return null;
+    return {
+      type: "Feature" as const,
+      geometry: {
+        type: "LineString" as const,
+        coordinates: alternativeRoutes[activeRoute].geometry.coordinates,
+      },
+      properties: {},
+    };
+  }, [activeRoute, alternativeRoutes]);
+
+  // Memoize turn marker positions to avoid O(N×M) findClosestPointOnRoute per render
+  const turnMarkers = useMemo(() => {
+    if (!isDirectionActive || !routeDataCRP?.[activeRoute]?.driving_directions) return [];
+    return routeDataCRP[activeRoute].driving_directions.map((turn) => {
+      const turnIcon = getTurnIconDirection(turn.turn_type);
+      
+      const turnPointOnPolyline = findClosestPointOnRoute(
+        turn.turn_point.lon,
+        turn.turn_point.lat,
+        activeRouteCoordinates,
+      );
+      
+      return { turn, turnIcon, turnPointOnPolyline };
+    });
+  }, [isDirectionActive, routeDataCRP, activeRoute, activeRouteCoordinates]);
+
   return (
     <Map
       {...viewState}
@@ -143,8 +230,9 @@ export function MapComponent({
         evt.preventDefault();
         setContextMenuCoord({ lng: evt.lngLat.lng, lat: evt.lngLat.lat });
       }}
-      onClick={() => {
+      onClick={(evt) => {
         if (contextMenuCoord) setContextMenuCoord(null);
+        if (onMapClick) onMapClick(evt.lngLat.lat, evt.lngLat.lng);
       }}
       touchZoomRotate={true}
       onLoad={(e) => {
@@ -196,18 +284,11 @@ export function MapComponent({
       )}
 
       {/* show shortest path route on below of active route  if sp path not activeRoute*/}
-      {!isDirectionActive && activeRoute != 0 && lineData && (
+      {!isDirectionActive && activeRoute != 0 && spRouteGeoJSON && (
         <Source
           id="polyline-source"
           type="geojson"
-          data={{
-            type: "Feature",
-            geometry: {
-              type: "LineString",
-              coordinates: lineData.geometry.coordinates,
-            },
-            properties: {},
-          }}
+          data={spRouteGeoJSON}
         >
           <Layer
             id="polyline-layer"
@@ -256,20 +337,12 @@ export function MapComponent({
           })}
 
       {/* active route is in alternative routes */}
-      {activeRoute != 0 && alternativeRoutes?.[activeRoute] && (
+      {activeRoute != 0 && activeRouteGeoJSON && (
         <>
           <Source
             id="active-route-source"
             type="geojson"
-            data={{
-              type: "Feature",
-              geometry: {
-                type: "LineString",
-                coordinates:
-                  alternativeRoutes[activeRoute].geometry.coordinates,
-              },
-              properties: {},
-            }}
+            data={activeRouteGeoJSON}
           >
             <Layer
               id="active-route-layer"
@@ -286,15 +359,8 @@ export function MapComponent({
       )}
 
       {isDirectionActive &&
-        routeDataCRP?.[activeRoute]?.driving_directions?.map((turn, i) => {
-          const turnIcon = getTurnIconDirection(turn.turn_type);
-          const turnPointOnPolyline = findClosestPointOnRoute(
-            turn.turn_point.lon,
-            turn.turn_point.lat,
-            activeRouteCoordinates,
-          );
-
-          if (turnIcon == "" || turnIconSize <= 0) {
+        turnMarkers.map(({ turn, turnIcon, turnPointOnPolyline }, i) => {
+          if (turnIcon === "" || turnIconSize <= 0) {
             return null;
           }
           return (
@@ -304,13 +370,15 @@ export function MapComponent({
               latitude={turnPointOnPolyline[1]}
               anchor="center"
             >
-              <Image
+              <img
                 src={turnIcon}
                 alt="turn icon"
                 width={turnIconSize}
                 height={turnIconSize}
                 style={{
+                  display: "block",
                   opacity: turnOpacity,
+                  filter: "drop-shadow(0px 0px 3px rgba(0,0,0,0.4))",
                   transform: `rotate(${
                     (turn.turn_bearing * 180) / Math.PI - userHeading
                   }deg)`,
@@ -321,19 +389,12 @@ export function MapComponent({
         })}
 
       {/* active route is shortest path route */}
-      {activeRoute == 0 && lineData && (
+      {activeRoute == 0 && spRouteGeoJSON && (
         <>
           <Source
             id="polyline-source"
             type="geojson"
-            data={{
-              type: "Feature",
-              geometry: {
-                type: "LineString",
-                coordinates: lineData.geometry.coordinates,
-              },
-              properties: {},
-            }}
+            data={spRouteGeoJSON}
           >
             <Layer
               id="polyline-layer"
@@ -353,14 +414,15 @@ export function MapComponent({
         <Marker
           latitude={matchedGpsLoc.lat}
           longitude={matchedGpsLoc.lon}
-          rotation={userHeading - faLocationArrowDegree}
+          rotation={userHeading }
+          rotationAlignment="map"
           anchor="center"
         >
           <div
             className="bg-[#F7FBFA]/50 flex items-center justify-center
            rounded-full w-[50px] h-[50px]  "
           >
-            <Image
+            <img
               src={"navigation_material.svg"}
               alt="navigation icon"
               width={30}
@@ -431,37 +493,26 @@ export function MapComponent({
           </div>
         </Popup>
       )}
-      <Source
-        id="bounding-box"
-        type="geojson"
-        data={{
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: [
-              [110.132, -8.2618],
-              [110.9221, -8.2618],
-              [110.9221, -6.888],
-              [110.132, -6.888],
-              [110.132, -8.2618],
-            ],
-          },
-          properties: {},
-        }}
-      >
-        <Layer
-          id="boundingbox-layer-layer"
-          type="line"
-          source="boundingbox-layer-source"
-          paint={{
-            "line-color": "#2B7FFF",
-            "line-width": 5,
-          }}
-        />
-      </Source>
+      {boundingBoxGeoJSON && (
+        <Source
+          id="bounding-box"
+          type="geojson"
+          data={boundingBoxGeoJSON}
+        >
+          <Layer
+            id="boundingbox-layer-layer"
+            type="line"
+            source="bounding-box"
+            paint={{
+              "line-color": "#2B7FFF",
+              "line-width": 5,
+            }}
+          />
+        </Source>
+      )}
     </Map>
   );
-}
+});
 
 function getTurnIconDirection(turnType: string): string {
   switch (turnType) {
@@ -489,6 +540,41 @@ function getTurnIconDirection(turnType: string): string {
   return "";
 }
 
+function getMidpoint(coordinates: number[][]): [number, number] {
+  if (coordinates.length === 0) return [0, 0];
+  if (coordinates.length === 1) return [coordinates[0][0], coordinates[0][1]];
+
+  let totalDistance = 0;
+  const distances: number[] = [];
+
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const d = haversineDistance(
+      coordinates[i][1], // lat1
+      coordinates[i][0], // lon1
+      coordinates[i + 1][1], // lat2
+      coordinates[i + 1][0]  // lon2
+    );
+    distances.push(d);
+    totalDistance += d;
+  }
+
+  const targetDistance = totalDistance / 2;
+  let currentDistance = 0;
+
+  for (let i = 0; i < distances.length; i++) {
+    if (currentDistance + distances[i] >= targetDistance) {
+      const remaining = targetDistance - currentDistance;
+      const fraction = distances[i] === 0 ? 0 : remaining / distances[i];
+      return [
+        coordinates[i][0] + (coordinates[i + 1][0] - coordinates[i][0]) * fraction,
+        coordinates[i][1] + (coordinates[i + 1][1] - coordinates[i][1]) * fraction,
+      ];
+    }
+    currentDistance += distances[i];
+  }
+
+  return [coordinates[coordinates.length - 1][0], coordinates[coordinates.length - 1][1]];
+}
 
 function findClosestPointOnRoute(
   lon: number,
@@ -499,19 +585,54 @@ function findClosestPointOnRoute(
     return [lon, lat];
   }
 
-  const targetMercY = latToMercator(lat);
+  const R = 6371e3; // Earth radius in meters
+  const lat1 = (lat * Math.PI) / 180;
+  const cosLat = Math.cos(lat1);
+
   let minDistance = Number.POSITIVE_INFINITY;
   let closestPoint: [number, number] = [lon, lat];
 
-  coordinates.forEach((coord) => {
-    const dx = coord[0] - lon;
-    const dy = latToMercator(coord[1]) - targetMercY;
-    const distance = Math.hypot(dx, dy);
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestPoint = [coord[0], coord[1]];
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const p1 = coordinates[i];
+    const p2 = coordinates[i + 1];
+
+    // Convert degrees to approximate local meters
+    const x1 = p1[0] * cosLat * R;
+    const y1 = p1[1] * R;
+    const x2 = p2[0] * cosLat * R;
+    const y2 = p2[1] * R;
+    const x0 = lon * cosLat * R;
+    const y0 = lat * R;
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dx0 = x0 - x1;
+    const dy0 = y0 - y1;
+
+    const lenSq = dx * dx + dy * dy;
+    let t = 0;
+    if (lenSq > 0) {
+      t = Math.max(0, Math.min(1, (dx0 * dx + dy0 * dy) / lenSq));
     }
-  });
+
+    const projX = x1 + t * dx;
+    const projY = y1 + t * dy;
+
+    const distSq = (x0 - projX) ** 2 + (y0 - projY) ** 2;
+    if (distSq < minDistance) {
+      minDistance = distSq;
+      // Interpolate the exact closest point on the segment
+      closestPoint = [
+        p1[0] + t * (p2[0] - p1[0]),
+        p1[1] + t * (p2[1] - p1[1]),
+      ];
+    }
+  }
+
+  // If the polyline only has 1 point, the loop doesn't run, fallback to vertex
+  if (coordinates.length === 1) {
+    return [coordinates[0][0], coordinates[0][1]];
+  }
 
   return closestPoint;
 }

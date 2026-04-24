@@ -39,6 +39,7 @@ export type RouterProps = {
   handleIsAlternativeChecked: () => void;
   onSelectSource: (place: Place) => void;
   onSelectDestination: (place: Place) => void;
+  ignoreDistanceCheck?: boolean;
 };
 
 export type SearchSelectorProps = {
@@ -59,6 +60,7 @@ export type MapComponentProps = {
   matchedGpsLoc: Coord | undefined;
   routeStarted: boolean;
   userHeading: number;
+  onMapClick?: (lat: number, lon: number) => void;
 };
 
 export type LineData = {

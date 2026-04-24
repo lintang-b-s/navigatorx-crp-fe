@@ -1,8 +1,8 @@
 "use client";
-import { MapComponent } from "@/app/ui/map";
+import dynamic from "next/dynamic";
 import { Router } from "@/app/ui/routing";
 import { SearchResults } from "./ui/searchResult";
-import { MouseEvent, Suspense, useEffect, useRef, useState } from "react";
+import { MouseEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { fetchReverseGeocoding, fetchSearch, Place } from "@/app/lib/searchApi";
 import toast from "react-hot-toast";
@@ -28,6 +28,19 @@ import {
   isUserOffTheRoute,
 } from "./lib/routing";
 import { useDeviceOrientation } from "./hook";
+import gsap from "gsap";
+
+const MapComponent = dynamic(
+  () => import("@/app/ui/map").then((mod) => mod.MapComponent),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{ width: "100vw", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f0f0" }}>
+        <p>Loading map…</p>
+      </div>
+    ),
+  },
+);
 
 const INVALID_LAT = 91;
 const INVALID_LON = 181;
@@ -81,14 +94,17 @@ export default function Home() {
   });
 
   const candidates = useRef<Candidate[]>([]);
-  const speedMeanK = useRef<number>(500.0);
-  const speedStdK = useRef<number>(500.0);
+  const speedMeanK = useRef<number>(8.3333);
+  const speedStdK = useRef<number>(8.3333);
   const lastBearing = useRef<number>(0.0);
   const prevGps = useRef<Gps>(undefined);
   const mapMatchStep = useRef<number>(1);
   const deadReckoning = useRef<boolean>(false);
+  const isInitialReroutePerformed = useRef<boolean>(false);
+  const currentGpsLocRef = useRef<Coord | null>(null);
+  const currentHeadingRef = useRef<number>(0);
 
-  const parseCoordinates = (input: string) => {
+  const parseCoordinates = useCallback((input: string) => {
     const coordRegex =
       /^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/;
     if (coordRegex.test(input)) {
@@ -98,7 +114,7 @@ export default function Home() {
       }
     }
     return null;
-  };
+  }, []);
 
   const { replace } = useRouter();
   // search useffect
@@ -161,7 +177,7 @@ export default function Home() {
     }
   }, [isSourceFocused, searchParams, isDestinationFocused]);
 
-  const pushParam = (key: "source" | "destination", place: Place) => {
+  const pushParam = useCallback((key: "source" | "destination", place: Place) => {
     const p = new URLSearchParams(searchParams.toString());
     p.set(
       key,
@@ -170,24 +186,24 @@ export default function Home() {
       }`,
     );
     replace(`${pathname}?${p.toString()}`);
-  };
+  }, [searchParams, pathname, replace]);
 
-  const handleClickAlternativeCheckbox = () => {
+  const handleClickAlternativeCheckbox = useCallback(() => {
     setIsAlternativeChecked((prev) => !prev);
-  };
-  const onSelectSource = (place: Place) => {
+  }, []);
+  const onSelectSource = useCallback((place: Place) => {
     setSourceLoc(place);
     pushParam("source", place);
-  };
+  }, [pushParam]);
 
-  const onSelectDestination = (place: Place) => {
+  const onSelectDestination = useCallback((place: Place) => {
     setDestinationLoc(place);
     pushParam("destination", place);
-  };
+  }, [pushParam]);
 
-  const handleFocusSourceSearch = (val: boolean) => {
+  const handleFocusSourceSearch = useCallback((val: boolean) => {
     setIsSourceFocused(val);
-  };
+  }, []);
 
   const onHandleGetRoutes = async (
     e: MouseEvent<HTMLButtonElement, MouseEvent>,
@@ -322,28 +338,28 @@ export default function Home() {
     }
   };
 
-  const onUserLocationUpdateHandler = (lat: number, lon: number) => {
+  const onUserLocationUpdateHandler = useCallback((lat: number, lon: number) => {
     setUserLoc({
       latitude: lat,
       longitude: lon,
     });
-  };
+  }, []);
 
-  const handleRouteClick = (index: number) => {
+  const handleRouteClick = useCallback((index: number) => {
     setActiveRoute(index);
-  };
+  }, []);
 
-  const handleDirectionActive = (show: boolean) => {
+  const handleDirectionActive = useCallback((show: boolean) => {
     setIsDirectionActive(show);
-  };
+  }, []);
 
-  const handleSetNextTurnIndex = (index: number) => {
+  const handleSetNextTurnIndex = useCallback((index: number) => {
     setNextTurnIndex(index);
-  };
+  }, []);
 
-  const handleStartRoute = (start: boolean) => {
+  const handleStartRoute = useCallback((start: boolean) => {
     setRouteStarted(start);
-  };
+  }, []);
 
   useEffect(() => {
     if (orientation?.alpha != null) {
@@ -351,9 +367,14 @@ export default function Home() {
     }
   }, [orientation]);
 
-  const defaultConstantSpeed = 500.0; // meter/min
+  const userHeading = useMemo(
+    () => matchedHeading !== undefined ? matchedHeading : normalizeBearing(gpsHeading),
+    [matchedHeading, gpsHeading],
+  );
 
-  const mapMatchSamplingInterval = 80; // 80ms
+  const defaultConstantSpeed = 8.3333; // meter/s
+
+  const mapMatchSamplingInterval = 1.0; // 1s
   const lostGpsThreshold = 2000; // 2s
   // route started useffect
   useEffect(() => {
@@ -363,9 +384,11 @@ export default function Home() {
         return;
       }
 
-      const ws = new WebSocket("wss://navigatorx.lintangbs.my.id/ws");
+      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL || `ws://${window.location.hostname}:6767/ws`;
+      const ws = new WebSocket(wsUrl);
 
       ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
         toast.error("WebSocket connection error");
       };
 
@@ -383,10 +406,12 @@ export default function Home() {
             // reset
             mapMatchStep.current = 1;
             candidates.current = [];
-            speedMeanK.current = 500.0;
-            speedStdK.current = 500.0;
+            speedMeanK.current = 8.3333;
+            speedStdK.current = 8.3333;
             lastBearing.current = 0.0;
-            setMatchedHeading(undefined);
+            setMatchedHeading(0);
+            currentGpsLocRef.current = null;
+            currentHeadingRef.current = 0;
             return;
           }
 
@@ -405,11 +430,54 @@ export default function Home() {
           speedMeanK.current = resp.data.speed_mean_k;
           speedStdK.current = resp.data.speed_std_k;
           lastBearing.current = resp.data.edge_initial_bearing;
-          setMatchedHeading(
-            normalizeBearing(resp.data.edge_initial_bearing * RAD_TO_DEG),
-          );
+          
+          const targetHeading = normalizeBearing(resp.data.edge_initial_bearing);
+          const matched = resp.data.matched_gps_point.matched_coord;
 
-          setMatchedGpsLoc(resp.data.matched_gps_point.matched_coord);
+          if (!currentGpsLocRef.current) {
+            currentGpsLocRef.current = { lat: matched.lat, lon: matched.lon };
+            setMatchedGpsLoc({ ...currentGpsLocRef.current });
+            currentHeadingRef.current = targetHeading;
+            setMatchedHeading(targetHeading);
+          } else {
+            const distance = haversineDistance(
+              currentGpsLocRef.current.lat,
+              currentGpsLocRef.current.lon,
+              matched.lat,
+              matched.lon
+            ) * 1000;
+            
+            let duration = 0.5;
+            if (speedMeanK.current > 0) {
+              duration = distance / speedMeanK.current;
+            }
+            duration = Math.max(0.1, Math.min(duration, 3.0));
+
+            let diff = targetHeading - currentHeadingRef.current;
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+            const targetHContinuous = currentHeadingRef.current + diff;
+
+            gsap.to(currentGpsLocRef.current, {
+              lat: matched.lat,
+              lon: matched.lon,
+              duration: duration,
+              ease: "none",
+              onUpdate: () => {
+                setMatchedGpsLoc({ ...currentGpsLocRef.current! });
+              }
+            });
+
+            gsap.to(currentHeadingRef, {
+              current: targetHContinuous,
+              duration: duration,
+              ease: "none",
+              onUpdate: () => {
+                setMatchedHeading(normalizeBearing(currentHeadingRef.current));
+              }
+            });
+          }
+
           setSnappedEdgeID(resp.data.matched_gps_point.edge_id);
         } catch (err) {
           toast.error("Failed to parse WebSocket message");
@@ -432,7 +500,7 @@ export default function Home() {
             deltaTime =
               (currentTime.getTime() -
                 (prevGps.current?.time?.getTime() ?? 0)) /
-              60000.0;
+              1000.0;
             const distance =
               haversineDistance(
                 prevGps.current?.lat!,
@@ -441,7 +509,7 @@ export default function Home() {
                 pos.coords.longitude,
               ) * 1000; //meter
             if (deltaTime > 0) {
-              speed = distance / deltaTime; // meter/minute
+              speed = distance / deltaTime; // meter/s
             }
           }
 
@@ -489,7 +557,7 @@ export default function Home() {
                 lon: prevGps.current.lon,
                 speed: defaultConstantSpeed,
                 delta_time: prevTime
-                  ? (currentTime.getTime() - prevTime.getTime()) / 60000.0
+                  ? (currentTime.getTime() - prevTime.getTime()) / 1000.0
                   : mapMatchSamplingInterval,
                 time: currentTime,
                 dead_reckoning: deadReckoning.current,
@@ -532,16 +600,26 @@ export default function Home() {
     } else {
       mapMatchStep.current = 1;
       candidates.current = [];
-      speedMeanK.current = 500.0;
-      speedStdK.current = 500.0;
+      speedMeanK.current = 8.3333;
+      speedStdK.current = 8.3333;
       lastBearing.current = 0.0;
       prevGps.current = undefined;
       deadReckoning.current = false;
       setMatchedGpsLoc(undefined);
-      setMatchedHeading(undefined);
+      setMatchedHeading(0);
       setSnappedEdgeID(0);
+      isInitialReroutePerformed.current = false;
+      currentGpsLocRef.current = null;
+      currentHeadingRef.current = 0;
     }
   }, [routeStarted]);
+
+  // Keep a ref to alternativeRoutesLineData so the re-routing effect can read
+  // the latest value without listing it as a dependency (which caused an infinite loop).
+  const alternativeRoutesLineDataRef = useRef(alternativeRoutesLineData);
+  useEffect(() => {
+    alternativeRoutesLineDataRef.current = alternativeRoutesLineData;
+  }, [alternativeRoutesLineData]);
 
   // re-routing logic useffect
   useEffect(() => {
@@ -579,8 +657,13 @@ export default function Home() {
           routeData: selectedRoute,
         });
         if (isOffTheRoute) {
-          // driver keluar jalur selected route -> do re-routing
+          if (mapMatchStep.current <= 5 && isInitialReroutePerformed.current) {
+            return;
+          }
           try {
+            if (mapMatchStep.current <= 5) {
+              isInitialReroutePerformed.current = true;
+            }
             const reqBody = {
               srcLat: matchedGpsLoc.lat!,
               srcLon: matchedGpsLoc.lon!,
@@ -605,14 +688,12 @@ export default function Home() {
             if (activeRoute == 0) {
               setPolylineData(linedata);
             } else {
-              setAlternativeRoutesLineData([
-                ...alternativeRoutesLineData.map((r, i) => {
-                  if (i == activeRoute) {
-                    return linedata;
-                  }
-                  return r;
-                }),
-              ]);
+              // Read from ref to avoid infinite loop (this effect must NOT depend on alternativeRoutesLineData)
+              setAlternativeRoutesLineData(
+                alternativeRoutesLineDataRef.current.map((r, i) =>
+                  i === activeRoute ? linedata : r,
+                ),
+              );
             }
           } catch (e: any) {
             toast.error(
@@ -628,12 +709,11 @@ export default function Home() {
     routeData,
     activeRoute,
     destinationLoc,
-    alternativeRoutesLineData,
   ]);
 
-  const handleSetRouteDataCRP = (data: RouteCRPResponse[]) => {
+  const handleSetRouteDataCRP = useCallback((data: RouteCRPResponse[]) => {
     setRouteData(data);
-  };
+  }, []);
 
   useEffect(() => {
     if (routeData?.length == 0) {
@@ -667,9 +747,7 @@ export default function Home() {
         onSelectDestination={onSelectDestination}
         routeStarted={routeStarted}
         matchedGpsLoc={matchedGpsLoc}
-        userHeading={
-          matchedHeading !== undefined ? matchedHeading : normalizeBearing(gpsHeading)
-        }
+        userHeading={userHeading}
       />
       <Router
         sourceSearchActive={handleFocusSourceSearch}
