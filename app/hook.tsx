@@ -24,13 +24,13 @@ export const useDeviceOrientation = (): UseDeviceOrientationData => {
     null
   );
 
-  const onDeviceOrientation = (event: DeviceOrientationEvent): void => {
+  const onDeviceOrientation = useCallback((event: DeviceOrientationEvent): void => {
     setOrientation({
       alpha: event.alpha,
       beta: event.beta,
       gamma: event.gamma,
     });
-  };
+  }, []);
 
   const revokeAccessAsync = async (): Promise<void> => {
     window.removeEventListener("deviceorientation", onDeviceOrientation);

@@ -1,0 +1,4 @@
+todo:
+1. add simulasi floating car data pakai SUMO simulator
+2. suruh gemini/claude update  page  simulasi online map matchig + driving direction  pakai floating car data (fcd) hasil simulator task pertama wkwkw
+

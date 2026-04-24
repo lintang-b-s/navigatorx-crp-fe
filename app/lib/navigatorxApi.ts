@@ -62,7 +62,7 @@ export const fetchRoute = async ({
 }: RouteRequest): Promise<RouteResponse> => {
   try {
     const { data } = await axios.get(
-      `http://localhost:5000/api/navigations/shortest-path?src_lat=${srcLat}&src_lon=${srcLon}&dst_lat=${destLat}&dst_lon=${destLon}`,
+      `${process.env.NEXT_PUBLIC_NAV_CH_API_URL}/api/navigations/shortest-path?src_lat=${srcLat}&src_lon=${srcLon}&dst_lat=${destLat}&dst_lon=${destLon}`,
       {}
     );
 
@@ -81,7 +81,7 @@ export const fetchRouteCRP = async ({
 }: RouteRequest): Promise<RouteCRPResponseWrapper> => {
   try {
     const { data } = await axios.get(
-      `http://localhost:6060/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
+      `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
       {}
     );
 
@@ -120,7 +120,7 @@ export const fetchAlternativeRoutes = async ({
 }: RouteRequest): Promise<AlternativeRoutesResponse> => {
   try {
     const { data } = await axios.get(
-      `http://localhost:6060/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2`,
+      `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2`,
       {}
     );
 

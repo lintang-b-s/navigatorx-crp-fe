@@ -1,13 +1,11 @@
-import { Dispatch, SetStateAction } from "react";
+import React, { Dispatch, SetStateAction } from "react";
 import { Place } from "../lib/searchApi";
 import { SearchSelectorProps } from "../types/definition";
 
-export function SearchResults(props: SearchSelectorProps) {
+export const SearchResults = React.memo(function SearchResults(props: SearchSelectorProps) {
   return (
     <div
-      className="absolute left-[5%] md:left-10 top-[200px] md:top-[240px] z-10  
-    w-[355px]  md:w-[380px]   mt-1 bg-white border-2 rounded-lg shadow-lg border-[#F5F5F5]  overflow-y-scroll
-     max-h-80 "
+      className="absolute left-1/2 -translate-x-1/2 sm:left-4 sm:translate-x-0 md:left-10 top-[190px] sm:top-[210px] z-10 w-[94vw] sm:w-[460px] mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-y-auto max-h-80"
     >
       {props.places.map((place, index) => (
         <div key={index} onMouseDown={() => props.select(place)}>
@@ -16,7 +14,7 @@ export function SearchResults(props: SearchSelectorProps) {
       ))}
     </div>
   );
-}
+});
 
 type SelectorProps = {
   index?: number;

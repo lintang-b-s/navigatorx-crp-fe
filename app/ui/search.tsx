@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import { CiSearch } from "react-icons/ci";
 import { SearchBoxProps } from "../types/definition";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
@@ -7,7 +8,7 @@ import { SearchResults } from "./searchResult";
 import { useEffect, useState } from "react";
 import { truncateString } from "../lib/util";
 
-export function SearchBox({
+export const SearchBox = React.memo(function SearchBox({
   isSource,
   activate,
   sourceLoc,
@@ -123,4 +124,4 @@ export function SearchBox({
       </div>
     </div>
   );
-}
+});
