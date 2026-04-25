@@ -4,9 +4,28 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import toast from "react-hot-toast";
 import { SimulationPanel } from "@/app/ui/simulationPanel";
 import { Coord, MapMatchRequest, Candidate } from "@/app/lib/mapmatchApi";
-import { haversineDistance } from "@/app/lib/util";
+import { haversineDistance, project, gt } from "@/app/lib/util";
 import { useDeviceOrientation } from "@/app/hook";
 import gsap from "gsap";
+import { fetchRouteCRP, RouteCRPResponse } from "@/app/lib/navigatorxApi";
+import { LineData } from "@/app/types/definition";
+import polyline from "@mapbox/polyline";
+import { 
+  getCurrentUserDirectionIndex, 
+  getDistanceFromUserToNextTurn, 
+  isUserOffTheRoute 
+} from "@/app/lib/routing";
+import { getTurnIcon } from "@/app/ui/routing";
+import Image from "next/image";
+import { FaCheck } from "react-icons/fa";
+import { CiStop1 } from "react-icons/ci";
+import { 
+  THROTTLE_DISTANCE_THRESHOLD, 
+  THROTTLE_HEADING_THRESHOLD,
+  INVALID_LAT,
+  INVALID_LON,
+  MIN_SPEED_THRESHOLD
+} from "@/app/lib/constants";
 
 const MapComponent = dynamic(
   () => import("@/app/ui/map").then((mod) => mod.MapComponent),
@@ -20,33 +39,127 @@ const MapComponent = dynamic(
   },
 );
 
-const RAD_TO_DEG = 180 / Math.PI;
 
 const normalizeBearing = (bearing: number) => {
   return ((bearing % 360) + 360) % 360;
 };
 
 export default function SimulationPage() {
-  const [matchedGpsLoc, setMatchedGpsLoc] = useState<Coord>();
-  const [matchedHeading, setMatchedHeading] = useState<number>(0);
+  const [simulationState, setSimulationState] = useState<{
+    matchedGpsLoc: Coord | undefined;
+    matchedHeading: number;
+  }>({
+    matchedGpsLoc: undefined,
+    matchedHeading: 0,
+  });
+  const { matchedGpsLoc, matchedHeading } = simulationState;
   const [isRunning, setIsRunning] = useState(false);
   const stopSimulationRef = useRef(false);
   const currentGpsLocRef = useRef<Coord | null>(null);
   const currentHeadingRef = useRef<number>(0);
+  const logResultsRef = useRef<{ edge_id: number; lat: number; lon: number }[]>([]);
   
   // Dummy data required by MapComponent props
   const [userLoc, setUserLoc] = useState({ longitude: -100, latitude: 40 });
 
+  const [gpsWindowPoints, setGpsWindowPoints] = useState<Coord[]>([]);
+
+  // Routing states
+  const [routeData, setRouteData] = useState<RouteCRPResponse[]>([]);
+  const [activeRoute, setActiveRoute] = useState(0);
+  const [distanceFromNextTurnPoint, setDistanceFromNextTurnPoint] = useState<number>(0);
+  const [currentDirectionIndex, setCurrentDirectionIndex] = useState(0);
+  const [snappedEdgeID, setSnappedEdgeID] = useState<number>(-1);
+  const [polylineData, setPolylineData] = useState<LineData>();
+  const [isDrivingDirectionEnabled, setIsDrivingDirectionEnabled] = useState(false);
+  
+  // States for simplified UI
+  const [isUsingWebSocket, setIsUsingWebSocket] = useState(false);
+  const [isShowingGpsWindow, setIsShowingGpsWindow] = useState(false);
+  const isShowingGpsWindowRef = useRef(false);
+  const isUsingWebSocketRef = useRef(false);
+  const routeDataRef = useRef<RouteCRPResponse[]>([]);
+  const activeRouteRef = useRef(0);
+
+  // Memoized props for MapComponent to prevent unnecessary re-renders
+  const memoizedAlternativeRoutes = useMemo(() => [], []);
+  const handleSelectSource = useCallback(() => {}, []);
+  const handleSelectDestination = useCallback(() => {}, []);
+
   const onSimulationStop = useCallback(() => {
     setIsRunning(false);
     stopSimulationRef.current = true;
+    setGpsWindowPoints([]);
   }, []);
 
-  const onSimulationStart = useCallback(async (points: any[], useWebSocket: boolean) => {
-    if (points.length === 0) return;
+  const onSimulationStart = useCallback(async (
+    points: any[], 
+    useWebSocket: boolean, 
+    samplingRate: number, 
+    showGpsWindow: boolean, 
+    drivingDirection: boolean,
+    writeToLog: boolean,
+    fileName: string,
+    trackName: string
+  ) => {
+    if (points.length === 0 || isRunning) return;
     
+    const simulationId = Date.now().toString();
+    logResultsRef.current = [];
+
     setIsRunning(true);
     stopSimulationRef.current = false;
+    setGpsWindowPoints([]);
+    setIsDrivingDirectionEnabled(drivingDirection);
+    setIsUsingWebSocket(useWebSocket);
+    setIsShowingGpsWindow(showGpsWindow);
+    isShowingGpsWindowRef.current = showGpsWindow;
+    isUsingWebSocketRef.current = useWebSocket;
+    setRouteData([]);
+    routeDataRef.current = [];
+    setPolylineData(undefined);
+    setSnappedEdgeID(-1);
+    
+    // Refs to track last updated values to avoid redundant state updates
+    let lastSnappedEdgeID = -1;
+    let lastDirectionIndex = -1;
+    let lastDist = -1;
+    let lastGpsWindowStr = "";
+
+    setSimulationState({
+      matchedGpsLoc: undefined,
+      matchedHeading: 0,
+    });
+
+    if (drivingDirection) {
+      try {
+        const firstPoint = points[0];
+        const lastPoint = points[points.length - 1];
+        const reqBody = {
+          srcLat: firstPoint.Latitude,
+          srcLon: firstPoint.Longitude,
+          destLat: lastPoint.Latitude,
+          destLon: lastPoint.Longitude,
+        };
+        const spRouteData = await fetchRouteCRP(reqBody);
+        setRouteData([spRouteData.data]);
+        routeDataRef.current = [spRouteData.data];
+        
+        const coords = polyline.decode(spRouteData.data.path);
+        const linedata: LineData = {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: coords.map((coord) => [coord[1], coord[0]]),
+          },
+        };
+        setPolylineData(linedata);
+        setActiveRoute(0);
+        activeRouteRef.current = 0;
+      } catch (error: any) {
+        toast.error("Failed to fetch initial route: " + error.message);
+      }
+    }
 
     let candidates: Candidate[] = [];
     let speedMeanK = 8.3333;
@@ -54,16 +167,11 @@ export default function SimulationPage() {
 
     let prev: any = null;
     let prevTime: Date | null = null;
-    const defaultConstantSpeed = 8.3333; // meter/s
-    let defaultSamplingInterval = 1.0; // default 1s
     let lastBearing = 0.0;
-
-    const startTime = new Date(points[0].datetime_utc);
-    const endTime = new Date(points[points.length - 1].datetime_utc);
 
     let ws: WebSocket | null = null;
     if (useWebSocket) {
-      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL || `ws://${window.location.hostname}:6767/ws`;
+      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL as string;
       ws = new WebSocket(wsUrl);
       ws.onerror = (e) => {
         console.error("WebSocket Error", e);
@@ -80,86 +188,97 @@ export default function SimulationPage() {
 
     const httpUrl = process.env.NEXT_PUBLIC_MAP_MATCH_HTTP_URL || "http://localhost:6161/api/onlineMapMatch";
 
-    for (
-      let currentTime = new Date(startTime);
-      currentTime <= endTime;
-      currentTime = new Date(currentTime.getTime() + 1000)
-    ) {
+    let accumulatedDt = 0;
+    for (let i = 0; i < points.length; i++) {
       if (stopSimulationRef.current) break;
 
-      const point = points.find((p) => {
-        const t = new Date(p.datetime_utc);
-        return Math.abs(t.getTime() - currentTime.getTime()) < 1000;
-      });
+      const point = points[i];
+      const t = new Date(point.datetime_utc);
+
+      if (isShowingGpsWindowRef.current) {
+        const startIdx = Math.max(0, i - 10);
+        const endIdx = Math.min(points.length - 1, i + 10);
+        const window = points.slice(startIdx, endIdx + 1).map(p => ({
+          lat: p.Latitude,
+          lon: p.Longitude
+        }));
+        const windowStr = JSON.stringify(window);
+        if (windowStr !== lastGpsWindowStr) {
+          setGpsWindowPoints(window);
+          lastGpsWindowStr = windowStr;
+        }
+      } else if (lastGpsWindowStr !== "empty") {
+        setGpsWindowPoints([]);
+        lastGpsWindowStr = "empty";
+      }
 
       let mapMatchRequest: MapMatchRequest | null = null;
-      let deadReckoning = false;
+      let speed = 0;
+      let dt_seconds = 0.0;
 
-      if (point) {
-        const t = new Date(point.datetime_utc);
-        let speed = 0;
-        let dt_seconds = 0.0;
-
-        if (prev) {
-          const prevT = new Date(prev.datetime_utc);
-          dt_seconds = (t.getTime() - prevT.getTime()) / 1000.0;
+      if (prev) {
+        const prevT = new Date(prev.datetime_utc);
+        dt_seconds = (t.getTime() - prevT.getTime()) / 1000.0;
+        
+        if (point.speed !== undefined) {
+          speed = point.speed;
+        } else {
           const distance = haversineDistance(
             prev.Latitude,
             prev.Longitude,
             point.Latitude,
             point.Longitude
-          ) * 1000; // haversineDistance returns km, so * 1000 for meters
+          ) * 1000;
+            
           if (dt_seconds > 0) {
             speed = distance / dt_seconds;
           }
         }
+      }
 
+      accumulatedDt += dt_seconds;
+      prev = point;
+      prevTime = t;
+
+      // Speed threshold check: skip if stationary (but not the first point)
+      if (speed < MIN_SPEED_THRESHOLD && i !== 0) {
+        const delay = Math.max(0.001, dt_seconds);
+        await new Promise((resolve) => setTimeout(resolve, delay * 1000));
+        continue;
+      }
+
+      // Only send request if accumulatedDt >= samplingRate or it's the first point
+      if (i === 0 || accumulatedDt >= samplingRate) {
         mapMatchRequest = {
           gps_point: {
             lat: point.Latitude,
             lon: point.Longitude,
             time: t.toISOString() as any,
             speed: speed,
-            delta_time: dt_seconds,
+            delta_time: accumulatedDt || 1.0,
             dead_reckoning: false,
           },
-          k: Math.round((t.getTime() - startTime.getTime()) / 1000) + 1,
+          k: i + 1,
           candidates: candidates,
           speed_mean_k: speedMeanK,
           speed_std_k: speedStdK,
           last_bearing: lastBearing,
         };
-
-        prev = point;
-        prevTime = t;
+        
+        accumulatedDt = 0;
       } else {
-        deadReckoning = true;
-
-        mapMatchRequest = {
-          gps_point: {
-            lat: prev ? prev.Latitude : 0,
-            lon: prev ? prev.Longitude : 0,
-            time: currentTime.toISOString() as any,
-            speed: defaultConstantSpeed,
-            delta_time: prevTime
-              ? (currentTime.getTime() - prevTime.getTime()) / 1000.0
-              : defaultSamplingInterval,
-            dead_reckoning: true,
-          },
-          k: Math.round((currentTime.getTime() - startTime.getTime()) / 1000) + 1,
-          candidates: candidates,
-          speed_mean_k: speedMeanK,
-          speed_std_k: speedStdK,
-          last_bearing: lastBearing,
-        };
-        prevTime = currentTime;
+        // Skip request, but wait for the native dt to keep sync
+        // IMPORTANT: Always await even if dt is 0 to prevent synchronous infinite loops
+        const delay = Math.max(0.001, dt_seconds);
+        await new Promise((resolve) => setTimeout(resolve, delay * 1000));
+        continue;
       }
 
       try {
         let apiResponse;
-        const requestStartTime = performance.now();
+
         
-        if (useWebSocket && ws && ws.readyState === WebSocket.OPEN) {
+        if (isUsingWebSocketRef.current && ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify(mapMatchRequest));
           apiResponse = await new Promise((resolve) => {
             ws!.onmessage = (event) => {
@@ -175,23 +294,24 @@ export default function SimulationPage() {
           apiResponse = await response.json();
         }
         
-        const networkDurationSeconds = (performance.now() - requestStartTime) / 1000.0;
 
         if (apiResponse && apiResponse.data) {
           if (
             apiResponse.data.matched_gps_point &&
             apiResponse.data.matched_gps_point.matched_coord &&
-            apiResponse.data.matched_gps_point.matched_coord.lat === 91 &&
-            apiResponse.data.matched_gps_point.matched_coord.lon === 181
+            apiResponse.data.matched_gps_point.matched_coord.lat === INVALID_LAT &&
+            apiResponse.data.matched_gps_point.matched_coord.lon === INVALID_LON
           ) {
             // reset
             candidates = [];
             speedMeanK = 8.3333;
             speedStdK = 8.3333;
             lastBearing = 0.0;
-            setMatchedHeading(0);
+            // No state update here, let the sync effect handle it
             currentGpsLocRef.current = null;
             currentHeadingRef.current = 0;
+            // Ensure we await to prevent sync loop
+            await new Promise((resolve) => setTimeout(resolve, 10));
             continue;
           }
 
@@ -209,9 +329,8 @@ export default function SimulationPage() {
             
             if (!currentGpsLocRef.current) {
               currentGpsLocRef.current = { lat: matched.lat, lon: matched.lon };
-              setMatchedGpsLoc({ ...currentGpsLocRef.current });
               currentHeadingRef.current = targetHeading;
-              setMatchedHeading(targetHeading);
+              // No state update here, let the sync effect handle it
               // Small initial delay
               await new Promise((resolve) => setTimeout(resolve, 50));
             } else {
@@ -222,16 +341,9 @@ export default function SimulationPage() {
                 matched.lon
               ) * 1000;
               
-              let duration = 0.5;
-              if (speedMeanK > 0) {
-                duration = distance / speedMeanK;
-              }
-              // Subtract the time it took to communicate with the server to keep the visual speed uniform
-              duration = duration - networkDurationSeconds;
+              let duration = dt_seconds;
               
-              // Keep it within reasonable bounds
-              duration = Math.max(0.1, Math.min(duration, 3.0));
-
+            
               // Calculate continuous target heading to avoid spinning the long way
               let diff = targetHeading - currentHeadingRef.current;
               if (diff > 180) diff -= 360;
@@ -239,40 +351,113 @@ export default function SimulationPage() {
               const targetHContinuous = currentHeadingRef.current + diff;
 
               await new Promise<void>((resolve) => {
-                let animationsCompleted = 0;
-                const checkDone = () => {
-                  animationsCompleted++;
-                  if (animationsCompleted === 2) resolve();
+                const animationData = {
+                  lat: currentGpsLocRef.current!.lat,
+                  lon: currentGpsLocRef.current!.lon,
+                  heading: currentHeadingRef.current
                 };
 
-                gsap.to(currentGpsLocRef.current, {
+                gsap.to(animationData, {
                   lat: matched.lat,
                   lon: matched.lon,
+                  heading: targetHContinuous,
                   duration: duration,
                   ease: "none",
                   onUpdate: () => {
-                    setMatchedGpsLoc({ ...currentGpsLocRef.current! });
+                    currentGpsLocRef.current = { lat: animationData.lat, lon: animationData.lon };
+                    currentHeadingRef.current = animationData.heading;
+                    // No state update here, let the sync effect handle it
                   },
-                  onComplete: checkDone
-                });
-
-                gsap.to(currentHeadingRef, {
-                  current: targetHContinuous,
-                  duration: duration,
-                  ease: "none",
-                  onUpdate: () => {
-                    setMatchedHeading(normalizeBearing(currentHeadingRef.current));
-                  },
-                  onComplete: checkDone
+                  onComplete: () => resolve()
                 });
               });
             }
+
+            // Update routing info if enabled
+            const currentMatchedLoc = { lat: matched.lat, lon: matched.lon };
+            const currentEdgeID = apiResponse.data.matched_gps_point.edge_id;
+            
+            if (currentEdgeID !== lastSnappedEdgeID) {
+              setSnappedEdgeID(currentEdgeID);
+              lastSnappedEdgeID = currentEdgeID;
+            }
+
+
+            if (drivingDirection && routeDataRef.current.length > 0) {
+              const usedRoute = routeDataRef.current[activeRouteRef.current];
+              if (usedRoute && usedRoute.driving_directions.length > 0) {
+                const directionsIndex = getCurrentUserDirectionIndex({
+                  snappedEdgeID: currentEdgeID,
+                  drivingDirections: usedRoute.driving_directions,
+                });
+                
+                // Ensure directionsIndex is valid
+                const safeIndex = Math.min(Math.max(0, directionsIndex), usedRoute.driving_directions.length - 1);
+                if (safeIndex !== lastDirectionIndex) {
+                  setCurrentDirectionIndex(safeIndex);
+                  lastDirectionIndex = safeIndex;
+                }
+
+                const nextTurn = usedRoute.driving_directions[safeIndex];
+                if (nextTurn && nextTurn.turn_point) {
+                  const newDist = getDistanceFromUserToNextTurn({
+                    matchedGpsLoc: currentMatchedLoc,
+                    nextTurnPoint: nextTurn.turn_point,
+                  }) * 1000.0;
+                  
+                  // Only update distance if it changed significantly (e.g. > 1m) to reduce re-renders
+                  if (Math.abs(newDist - lastDist) > 1) {
+                    setDistanceFromNextTurnPoint(newDist);
+                    lastDist = newDist;
+                  }
+                }
+
+                // Re-routing logic: trigger only if the user is on a valid edge and off the route
+                const isOffTheRoute = isUserOffTheRoute({
+                  snappedEdgeID: currentEdgeID,
+                  routeData: usedRoute,
+                });
+
+                if (isOffTheRoute && currentEdgeID !== -1) {
+                  try {
+                    const lastPoint = points[points.length - 1];
+                    const reqBody = {
+                      srcLat: currentMatchedLoc.lat,
+                      srcLon: currentMatchedLoc.lon,
+                      destLat: lastPoint.Latitude,
+                      destLon: lastPoint.Longitude,
+                      reroute: true,
+                      startEdgeId: currentEdgeID,
+                    };
+                    const newSpRouteData = await fetchRouteCRP(reqBody);
+                    setRouteData([newSpRouteData.data]);
+                    routeDataRef.current = [newSpRouteData.data];
+                    const coords = polyline.decode(newSpRouteData.data.path);
+                    const newLinedata: LineData = {
+                      type: "Feature",
+                      geometry: {
+                        type: "LineString",
+                        coordinates: coords.map((coord) => [coord[1], coord[0]]),
+                      },
+                    };
+                    setPolylineData(newLinedata);
+                    
+                    if (writeToLog) {
+                      logResultsRef.current.push({
+                        edge_id: currentEdgeID,
+                        lat: matched.lat,
+                        lon: matched.lon,
+                      });
+                    }
+                  } catch (e: any) {
+                    console.error("Re-routing failed:", e);
+                  }
+                }
+              }
+            }
           } else {
-             await new Promise((resolve) => setTimeout(resolve, 50));
-          }
-          if (deadReckoning) {
-            prev.Latitude = apiResponse.data.matched_gps_point.predicted_gps_coord.lat;
-            prev.Longitude = apiResponse.data.matched_gps_point.predicted_gps_coord.lon;
+             const delay = Math.max(0.05, dt_seconds);
+             await new Promise((resolve) => setTimeout(resolve, delay * 1000));
           }
         }
       } catch (error) {
@@ -287,34 +472,157 @@ export default function SimulationPage() {
       ws.close();
     }
     setIsRunning(false);
+
+    if (writeToLog && logResultsRef.current.length > 0) {
+      const content = logResultsRef.current
+        .map((res) => `${res.edge_id},${res.lat},${res.lon}`)
+        .join("\n");
+      
+      const blob = new Blob([content], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${simulationId}_${trackName}_${fileName}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
     toast.success("Simulation finished");
-  }, [onSimulationStop]);
+  }, [onSimulationStop, isRunning]);
 
   const onUserLocationUpdateHandler = useCallback((lat: number, lon: number) => {
     setUserLoc({ latitude: lat, longitude: lon });
   }, []);
 
+  // Sync refs to state for UI updates at a controlled rate
+  useEffect(() => {
+    if (!isRunning) return;
+    
+    let frameId: number;
+    let lastLat = 0;
+    let lastLon = 0;
+    let lastH = 0;
+
+    const sync = () => {
+      if (currentGpsLocRef.current) {
+        const curLat = currentGpsLocRef.current.lat;
+        const curLon = currentGpsLocRef.current.lon;
+        const curH = normalizeBearing(currentHeadingRef.current);
+        
+        // Only update state if values changed significantly
+        const p1 = project(lastLat, lastLon);
+        const p2 = project(curLat, curLon);
+        const dist = Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+        
+        if (gt(dist, THROTTLE_DISTANCE_THRESHOLD) || gt(Math.abs(curH - lastH), THROTTLE_HEADING_THRESHOLD)) {
+          setSimulationState({
+            matchedGpsLoc: { lat: curLat, lon: curLon },
+            matchedHeading: curH,
+          });
+          lastLat = curLat;
+          lastLon = curLon;
+          lastH = curH;
+        }
+      }
+      frameId = requestAnimationFrame(sync);
+    };
+    frameId = requestAnimationFrame(sync);
+    return () => cancelAnimationFrame(frameId);
+  }, [isRunning]);
+
   return (
     <main className="flex relative w-full overflow-hidden">
       <MapComponent
-        lineData={undefined}
+        lineData={polylineData}
         onUserLocationUpdateHandler={onUserLocationUpdateHandler}
-        alternativeRoutes={[]}
-        activeRoute={0}
-        isDirectionActive={false}
-        routeDataCRP={undefined}
+        alternativeRoutes={memoizedAlternativeRoutes}
+        activeRoute={activeRoute}
+        isDirectionActive={isDrivingDirectionEnabled && isRunning}
+        routeDataCRP={routeData}
         nextTurnIndex={-1}
-        onSelectSource={() => {}}
-        onSelectDestination={() => {}}
+        onSelectSource={handleSelectSource}
+        onSelectDestination={handleSelectDestination}
         routeStarted={true} // Must be true to show the car marker
         matchedGpsLoc={matchedGpsLoc}
+        gpsWindowPoints={gpsWindowPoints}
         userHeading={matchedHeading}
       />
-      <SimulationPanel 
-        onSimulationStart={onSimulationStart}
-        onSimulationStop={onSimulationStop}
-        isRunning={isRunning}
-      />
+      
+      {isRunning && isDrivingDirectionEnabled && (
+        <div className="sm:hidden absolute top-4 left-1/2 -translate-x-1/2 w-[94vw] z-20 flex flex-col gap-2">
+          <div className="bg-white/90 backdrop-blur-sm rounded-xl p-3 shadow-lg flex items-center justify-between">
+            <div className="flex gap-4">
+              <button 
+                onClick={() => {
+                  const newVal = !isUsingWebSocket;
+                  setIsUsingWebSocket(newVal);
+                  isUsingWebSocketRef.current = newVal;
+                  toast.success(newVal ? "WebSocket enabled (will apply on next request if possible)" : "WebSocket disabled");
+                }}
+                className="flex items-center gap-1.5 cursor-pointer"
+              >
+                <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-all ${isUsingWebSocket ? "bg-blue-500" : "border border-gray-400"}`}>
+                  {isUsingWebSocket && <FaCheck size={8} color="white" />}
+                </div>
+                <span className="text-[10px] font-medium text-gray-600">WS</span>
+              </button>
+              <button 
+                onClick={() => {
+                  const newVal = !isShowingGpsWindow;
+                  setIsShowingGpsWindow(newVal);
+                  isShowingGpsWindowRef.current = newVal;
+                }}
+                className="flex items-center gap-1.5 cursor-pointer"
+              >
+                <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-all ${isShowingGpsWindow ? "bg-blue-500" : "border border-gray-400"}`}>
+                  {isShowingGpsWindow && <FaCheck size={8} color="white" />}
+                </div>
+                <span className="text-[10px] font-medium text-gray-600">GPS Win</span>
+              </button>
+            </div>
+            <button 
+              onClick={onSimulationStop}
+              className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+            >
+              <CiStop1 size={14} /> STOP
+            </button>
+          </div>
+
+          {routeData.length > 0 && routeData[activeRoute] && routeData[activeRoute].driving_directions[currentDirectionIndex] && (
+            <div className="bg-[#222831]/95 backdrop-blur-md rounded-2xl p-4 shadow-xl flex items-center gap-4 border border-white/10">
+              <div className="bg-white/10 p-2 rounded-xl">
+                <Image
+                  src={getTurnIcon(
+                    routeData[activeRoute].driving_directions[currentDirectionIndex].turn_type,
+                    "icons_white"
+                  )}
+                  width={42}
+                  height={42}
+                  alt="turn icon"
+                />
+              </div>
+              <div className="flex flex-col">
+                <p className="text-xl font-black text-white leading-tight">
+                  {distanceFromNextTurnPoint.toFixed(0)} <span className="text-sm font-normal opacity-70">m</span>
+                </p>
+                <p className="text-sm font-bold text-blue-400 line-clamp-1">
+                  {routeData[activeRoute].driving_directions[currentDirectionIndex].street_name}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={isRunning && isDrivingDirectionEnabled ? "hidden sm:block" : "block"}>
+        <SimulationPanel 
+          onSimulationStart={onSimulationStart}
+          onSimulationStop={onSimulationStop}
+          isRunning={isRunning}
+        />
+      </div>
     </main>
   );
 }

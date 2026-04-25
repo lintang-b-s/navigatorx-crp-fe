@@ -9,14 +9,18 @@ export function isUserOffTheRoute({
   snappedEdgeID: number;
   routeData: RouteCRPResponse;
 }): boolean {
-  // Build a Set for O(1) lookup instead of nested O(D×E) loops
+  // Use a Set for O(1) lookup instead of nested O(D×E) loops
+  const edgeSet = new Set<number>();
   for (const direction of routeData.driving_directions) {
     for (const edgeID of direction.edge_ids) {
-      if (snappedEdgeID === edgeID) {
-        return false;
-      }
+      edgeSet.add(edgeID);
     }
   }
+
+  if (edgeSet.has(snappedEdgeID)) {
+    return false;
+  }
+  
   return true;
 }
 
@@ -27,7 +31,7 @@ export function getCurrentUserDirectionIndex({
   snappedEdgeID: number;
   drivingDirections: Direction[];
 }): number {
-  let directionIndex = 1;
+  let directionIndex = 0;
   for (let i = 0; i < drivingDirections.length; i++) {
     const direction = drivingDirections[i];
     for (let j = 0; j < direction.edge_ids.length; j++) {
