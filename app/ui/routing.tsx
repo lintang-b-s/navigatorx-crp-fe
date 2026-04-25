@@ -34,8 +34,9 @@ export const Router = React.memo(function Router(props: RouterProps) {
   const [isSourceFocused, setIsSourceFocused] = useState(false);
   const [showDirections, setShowDirections] = useState(false);
 
-  const [nowTime, setNowTime] = useState(new Date());
+  const [nowTime, setNowTime] = useState<Date | null>(null);
   useEffect(() => {
+    setNowTime(new Date());
     const id = setInterval(() => setNowTime(new Date()), 5000);
     return () => clearInterval(id);
   }, []);
@@ -85,6 +86,7 @@ export const Router = React.memo(function Router(props: RouterProps) {
             showDirections,
             handleShowDirections,
             props.handleSetNextTurnIndex,
+            nowTime,
           )}
           {showRouteResult(
             props,
@@ -94,6 +96,7 @@ export const Router = React.memo(function Router(props: RouterProps) {
             handleShowDirections,
             props.handleSetNextTurnIndex,
             props.handleStartRoute,
+            nowTime,
           )}
           {showRouteEtaAndDistance(
             props,
@@ -209,6 +212,7 @@ function showRouteResultMobile(
   showDirections: boolean = false,
   handleShowDirections: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
+  nowTime: Date | null,
 ) {
   const routeDirections = props.routeDataCRP![
     activeRoute
@@ -391,7 +395,7 @@ function showRouteResultMobile(
                         {Math.round(route.travel_time)} Menit
                       </span>
                       <span>&nbsp;&nbsp;&nbsp;</span>
-                      Tiba pada {getArrivalTime(route.travel_time)}{" "}
+                      Tiba pada {nowTime ? getArrivalTime(route.travel_time, nowTime) : "--:--"}{" "}
                     </p>
                     <p className="text-sm text-[#4C4C4C] ">
                       {route.distance} KM
@@ -455,7 +459,7 @@ function showRouteEtaAndDistance(
   activeRoute: number,
   routeStarted: boolean = false,
   handleStartRoute: (show: boolean) => void,
-  nowTime: Date,
+  nowTime: Date | null,
 ) {
   return (
     <div
@@ -467,14 +471,14 @@ function showRouteEtaAndDistance(
       <div></div>
       <div className="flex flex-col space-y-2 items-center justify-center">
         <p className="font-bold text-xl tracking-wide ">
-          {new Date(
+          {nowTime ? new Date(
             nowTime.getTime() +
               props.routeDataCRP![activeRoute].travel_time * 60000,
           ).toLocaleTimeString("en-US", {
             hour: "2-digit",
             minute: "2-digit",
             hour12: true,
-          })}
+          }) : "--:--"}
         </p>
         <div className="flex flex-row space-x-2 items-center">
           <p className="text-base ">
@@ -507,6 +511,7 @@ function showRouteResult(
   handleShowDirections: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
   handleStartRoute: (start: boolean) => void,
+  nowTime: Date | null,
 ) {
   return (
     <div
@@ -610,7 +615,7 @@ function showRouteResult(
                       {Math.round(route.travel_time)} Menit
                     </span>
                     <span>&nbsp;&nbsp;&nbsp;</span>
-                    Tiba pada {getArrivalTime(route.travel_time)}{" "}
+                    Tiba pada {nowTime ? getArrivalTime(route.travel_time, nowTime) : "--:--"}{" "}
                   </p>
                   <p className="text-sm text-[#4C4C4C] ">{route.distance} KM</p>
                 </div>
@@ -749,7 +754,7 @@ function showRouteDirectionsComponent(
   );
 }
 
-function getTurnIcon(turnType: string, directory: string): string {
+export function getTurnIcon(turnType: string, directory: string): string {
   switch (turnType) {
     case "TURN_RIGHT":
       return `/${directory}/turn_right.png`;

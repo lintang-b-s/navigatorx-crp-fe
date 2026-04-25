@@ -13,7 +13,7 @@ import {
 } from "@vis.gl/react-maplibre";
 // @ts-ignore
 import "maplibre-gl/dist/maplibre-gl.css"; // See notes below
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import toast from "react-hot-toast";
 import { LineData, MapComponentProps } from "../types/definition";
 import Image from "next/image";
@@ -51,6 +51,7 @@ export const MapComponent = React.memo(function MapComponent({
   onSelectSource,
   onSelectDestination,
   matchedGpsLoc,
+  gpsWindowPoints,
   routeStarted,
   userHeading,
   onMapClick,
@@ -59,6 +60,7 @@ export const MapComponent = React.memo(function MapComponent({
     lng: number;
     lat: number;
   } | null>(null);
+  const mapRef = useRef<any>(null);
 
   const [boundingBoxGeoJSON, setBoundingBoxGeoJSON] = useState<any>(null);
 
@@ -67,6 +69,8 @@ export const MapComponent = React.memo(function MapComponent({
     latitude: -7.78787,
     zoom: 13,
   });
+  
+  const isProgrammaticUpdateRef = useRef(false);
 
   useEffect(() => {
     const fetchBoundingBox = async () => {
@@ -120,17 +124,15 @@ export const MapComponent = React.memo(function MapComponent({
   }
 
   useEffect(() => {
-    if (routeStarted && matchedGpsLoc) {
-      // update view state to user current matched gps location
-      setViewState((prev) => ({
-        ...prev,
-        longitude: matchedGpsLoc!.lon,
-        latitude: matchedGpsLoc!.lat,
-        zoom: 16,
+    if (routeStarted && matchedGpsLoc && mapRef.current) {
+      mapRef.current.jumpTo({
+        center: [matchedGpsLoc.lon, matchedGpsLoc.lat],
         bearing: userHeading,
-      }));
+        zoom: 16,
+      });
       return;
     }
+
     const selectedCoordinates =
       activeRoute === 0
         ? lineData?.geometry.coordinates
@@ -140,11 +142,14 @@ export const MapComponent = React.memo(function MapComponent({
       return;
     }
 
-    const fittedViewport = getRouteFittedViewState(selectedCoordinates);
-    setViewState((prev) => ({
-      ...prev,
-      ...fittedViewport,
-    }));
+    if (mapRef.current) {
+      const fittedViewport = getRouteFittedViewState(selectedCoordinates);
+      mapRef.current.jumpTo({
+        center: [fittedViewport.longitude, fittedViewport.latitude],
+        zoom: fittedViewport.zoom,
+        bearing: 0
+      });
+    }
   }, [
     isDirectionActive,
     lineData,
@@ -153,6 +158,7 @@ export const MapComponent = React.memo(function MapComponent({
     routeStarted,
     matchedGpsLoc,
     routeDataCRP,
+    userHeading,
   ]);
 
   useEffect(() => {
@@ -219,12 +225,31 @@ export const MapComponent = React.memo(function MapComponent({
     });
   }, [isDirectionActive, routeDataCRP, activeRoute, activeRouteCoordinates]);
 
+  const gpsWindowGeoJSON = useMemo(() => {
+    if (!gpsWindowPoints || gpsWindowPoints.length === 0) return null;
+    return {
+      type: "FeatureCollection" as const,
+      features: gpsWindowPoints.map((p) => ({
+        type: "Feature" as const,
+        geometry: {
+          type: "Point" as const,
+          coordinates: [p.lon, p.lat],
+        },
+        properties: {},
+      })),
+    };
+  }, [gpsWindowPoints]);
+
   return (
     <Map
-      {...viewState}
+      initialViewState={viewState}
       bearing={routeStarted ? userHeading : 0}
       style={{ width: "100vw", height: "100vh" }}
-      onMove={(evt) => setViewState(evt.viewState)}
+      onMove={(evt) => {
+        if (evt.originalEvent) {
+          setViewState(evt.viewState);
+        }
+      }}
       mapStyle="https://tiles.openfreemap.org/styles/liberty"
       onContextMenu={(evt) => {
         evt.preventDefault();
@@ -236,11 +261,28 @@ export const MapComponent = React.memo(function MapComponent({
       }}
       touchZoomRotate={true}
       onLoad={(e) => {
+        mapRef.current = e.target;
         e.target.touchZoomRotate.enableRotation();
       }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      {gpsWindowGeoJSON && (
+        <Source id="gps-window-source" type="geojson" data={gpsWindowGeoJSON}>
+          <Layer
+            id="gps-window-layer"
+            type="circle"
+            paint={{
+              "circle-radius": 5,
+              "circle-color": "#FF0000",
+              "circle-stroke-width": 1,
+              "circle-stroke-color": "#FFFFFF",
+              "circle-opacity": 0.6,
+            }}
+          />
+        </Source>
+      )}
+
       {!routeStarted ? (
         <>
           <GeolocateControl

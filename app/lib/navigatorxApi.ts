@@ -45,6 +45,8 @@ export interface RouteRequest {
   srcLon: number;
   destLat: number;
   destLon: number;
+  reroute?: boolean;
+  startEdgeId?: number;
 }
 
 export interface AlternativeRoutesResponse {
@@ -78,12 +80,17 @@ export const fetchRouteCRP = async ({
   srcLon,
   destLat,
   destLon,
+  reroute = false,
+  startEdgeId,
 }: RouteRequest): Promise<RouteCRPResponseWrapper> => {
   try {
-    const { data } = await axios.get(
-      `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}`,
-      {}
-    );
+    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}${reroute ? "&reroute=true" : ""}`;
+
+    if (startEdgeId !== undefined && startEdgeId !== -1) {
+      url += `&start_edge_id=${startEdgeId}`;
+    }
+
+    const { data } = await axios.get(url, {});
 
     return data;
   } catch (error: any) {

@@ -1,10 +1,12 @@
+import { EPS } from "./constants";
+
 export function truncateString(str: string, maxLength: number = 30) {
   if (str.length <= maxLength) return str;
   return str.slice(0, maxLength - 3) + "...";
 }
 
-export function getArrivalTime(etaMinutes: number) {
-  const arrivalDate = new Date(Date.now() + etaMinutes * 60 * 1000);
+export function getArrivalTime(etaMinutes: number, baseDate: Date = new Date()) {
+  const arrivalDate = new Date(baseDate.getTime() + etaMinutes * 60 * 1000);
 
   let hours = arrivalDate.getHours();
   const minutes = arrivalDate.getMinutes();
@@ -43,4 +45,17 @@ export function haversineDistance(
   const c = 2 * Math.asin(Math.sqrt(a));
 
   return EARTH_RADIUS_KM * c;
+}
+
+export function project(lat: number, lon: number): { x: number; y: number } {
+  const R = 6378137;
+  const x = R * toRadians(lon);
+  const y = R * Math.log(Math.tan(Math.PI / 4 + toRadians(lat) / 2));
+  return { x, y };
+}
+
+export { EPS };
+
+export function gt(a: number, b: number): boolean {
+  return a > b + EPS;
 }

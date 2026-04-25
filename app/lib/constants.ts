@@ -1,0 +1,11 @@
+export const THROTTLE_DISTANCE_THRESHOLD = 3; // meters
+export const THROTTLE_HEADING_THRESHOLD = 0.1; // degrees
+export const EPS = 1e-9;
+export const INVALID_LAT = 91;
+export const INVALID_LON = 181;
+export const RAD_TO_DEG = 180 / Math.PI;
+export const DEFAULT_CONSTANT_SPEED = 8.3333; // m/s (approx 30 km/h)
+export const MAP_MATCH_SAMPLING_INTERVAL = 1.0; // seconds
+export const LOST_GPS_THRESHOLD = 2000; // ms
+export const MIN_SPEED_THRESHOLD = 0.3; // m/s (approx 1 km/h)
+

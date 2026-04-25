@@ -58,6 +58,7 @@ export type MapComponentProps = {
   onSelectSource: (place: Place) => void;
   onSelectDestination: (place: Place) => void;
   matchedGpsLoc: Coord | undefined;
+  gpsWindowPoints?: Coord[];
   routeStarted: boolean;
   userHeading: number;
   onMapClick?: (lat: number, lon: number) => void;

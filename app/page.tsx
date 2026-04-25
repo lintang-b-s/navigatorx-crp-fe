@@ -21,13 +21,23 @@ import {
   Gps,
   MapMatchRequest,
 } from "./lib/mapmatchApi";
-import { haversineDistance } from "./lib/util";
+import { haversineDistance, project, gt } from "./lib/util";
 import {
   getCurrentUserDirectionIndex,
   getDistanceFromUserToNextTurn,
   isUserOffTheRoute,
 } from "./lib/routing";
 import { useDeviceOrientation } from "./hook";
+import { 
+  THROTTLE_DISTANCE_THRESHOLD, 
+  THROTTLE_HEADING_THRESHOLD,
+  INVALID_LAT,
+  INVALID_LON,
+  MIN_SPEED_THRESHOLD,
+  DEFAULT_CONSTANT_SPEED,
+  MAP_MATCH_SAMPLING_INTERVAL,
+  LOST_GPS_THRESHOLD
+} from "@/app/lib/constants";
 import gsap from "gsap";
 
 const MapComponent = dynamic(
@@ -42,9 +52,6 @@ const MapComponent = dynamic(
   },
 );
 
-const INVALID_LAT = 91;
-const INVALID_LON = 181;
-const RAD_TO_DEG = 180 / Math.PI;
 
 const normalizeBearing = (bearing: number) => {
   return ((bearing % 360) + 360) % 360;
@@ -384,7 +391,7 @@ export default function Home() {
         return;
       }
 
-      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL || `ws://${window.location.hostname}:6767/ws`;
+      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL as string;
       const ws = new WebSocket(wsUrl);
 
       ws.onerror = (error) => {
@@ -406,8 +413,8 @@ export default function Home() {
             // reset
             mapMatchStep.current = 1;
             candidates.current = [];
-            speedMeanK.current = 8.3333;
-            speedStdK.current = 8.3333;
+            speedMeanK.current = DEFAULT_CONSTANT_SPEED;
+            speedStdK.current = DEFAULT_CONSTANT_SPEED;
             lastBearing.current = 0.0;
             setMatchedHeading(0);
             currentGpsLocRef.current = null;
@@ -464,7 +471,7 @@ export default function Home() {
               duration: duration,
               ease: "none",
               onUpdate: () => {
-                setMatchedGpsLoc({ ...currentGpsLocRef.current! });
+                // No state update here, let the sync effect handle it
               }
             });
 
@@ -473,7 +480,7 @@ export default function Home() {
               duration: duration,
               ease: "none",
               onUpdate: () => {
-                setMatchedHeading(normalizeBearing(currentHeadingRef.current));
+                // No state update here, let the sync effect handle it
               }
             });
           }
@@ -496,7 +503,9 @@ export default function Home() {
             setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
           }
 
-          if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
+          if (pos.coords.speed !== null && pos.coords.speed !== undefined) {
+            speed = pos.coords.speed;
+          } else if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
             deltaTime =
               (currentTime.getTime() -
                 (prevGps.current?.time?.getTime() ?? 0)) /
@@ -521,6 +530,11 @@ export default function Home() {
             time: currentTime,
             dead_reckoning: false,
           };
+
+          // Speed threshold check: skip if stationary (but not the first step)
+          if (speed < MIN_SPEED_THRESHOLD && mapMatchStep.current > 1) {
+            return;
+          }
 
           let mapMatchRequest: MapMatchRequest = {
             gps_point: currentGps,
@@ -549,16 +563,16 @@ export default function Home() {
               prevGps &&
               prevGps.current &&
               now.getTime() - prevGps.current?.time?.getTime() >
-                lostGpsThreshold
+                LOST_GPS_THRESHOLD
             ) {
               deadReckoning.current = true;
               currentGps = {
                 lat: prevGps.current.lat,
                 lon: prevGps.current.lon,
-                speed: defaultConstantSpeed,
+                speed: DEFAULT_CONSTANT_SPEED,
                 delta_time: prevTime
                   ? (currentTime.getTime() - prevTime.getTime()) / 1000.0
-                  : mapMatchSamplingInterval,
+                  : MAP_MATCH_SAMPLING_INTERVAL,
                 time: currentTime,
                 dead_reckoning: deadReckoning.current,
               };
@@ -600,8 +614,8 @@ export default function Home() {
     } else {
       mapMatchStep.current = 1;
       candidates.current = [];
-      speedMeanK.current = 8.3333;
-      speedStdK.current = 8.3333;
+      speedMeanK.current = DEFAULT_CONSTANT_SPEED;
+      speedStdK.current = DEFAULT_CONSTANT_SPEED;
       lastBearing.current = 0.0;
       prevGps.current = undefined;
       deadReckoning.current = false;
@@ -612,6 +626,40 @@ export default function Home() {
       currentGpsLocRef.current = null;
       currentHeadingRef.current = 0;
     }
+  }, [routeStarted]);
+
+  // Sync refs to state for UI updates at a controlled rate
+  useEffect(() => {
+    if (!routeStarted) return;
+    
+    let frameId: number;
+    let lastLat = 0;
+    let lastLon = 0;
+    let lastH = 0;
+
+    const sync = () => {
+      if (currentGpsLocRef.current) {
+        const curLat = currentGpsLocRef.current.lat;
+        const curLon = currentGpsLocRef.current.lon;
+        const curH = normalizeBearing(currentHeadingRef.current);
+        
+        // Only update state if values changed significantly
+        const p1 = project(lastLat, lastLon);
+        const p2 = project(curLat, curLon);
+        const dist = Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+        
+        if (gt(dist, THROTTLE_DISTANCE_THRESHOLD) || gt(Math.abs(curH - lastH), THROTTLE_HEADING_THRESHOLD)) {
+          setMatchedGpsLoc({ lat: curLat, lon: curLon });
+          setMatchedHeading(curH);
+          lastLat = curLat;
+          lastLon = curLon;
+          lastH = curH;
+        }
+      }
+      frameId = requestAnimationFrame(sync);
+    };
+    frameId = requestAnimationFrame(sync);
+    return () => cancelAnimationFrame(frameId);
   }, [routeStarted]);
 
   // Keep a ref to alternativeRoutesLineData so the re-routing effect can read
@@ -632,14 +680,18 @@ export default function Home() {
         snappedEdgeID: snappedEdgeID,
         drivingDirections: usedRouteDirections,
       });
-      setCurrentDirectionIndex(directionsIndex);
+      if (directionsIndex !== currentDirectionIndex) {
+        setCurrentDirectionIndex(directionsIndex);
+      }
 
-      setDistanceFromNextTurnPoint(
-        getDistanceFromUserToNextTurn({
+      const newDist = getDistanceFromUserToNextTurn({
           matchedGpsLoc: matchedGpsLoc,
           nextTurnPoint: usedRouteDirections[directionsIndex].turn_point,
-        }) * 1000.0,
-      );
+        }) * 1000.0;
+      
+      if (Math.abs(newDist - distanceFromNextTurnPoint) > 1) {
+        setDistanceFromNextTurnPoint(newDist);
+      }
     }
 
     const firstRouteEdgeID = usedRoute?.driving_directions[0]?.edge_ids[0];
@@ -656,7 +708,7 @@ export default function Home() {
           snappedEdgeID: snappedEdgeID,
           routeData: selectedRoute,
         });
-        if (isOffTheRoute) {
+        if (isOffTheRoute && snappedEdgeID !== -1) {
           if (mapMatchStep.current <= 5 && isInitialReroutePerformed.current) {
             return;
           }
@@ -669,6 +721,8 @@ export default function Home() {
               srcLon: matchedGpsLoc.lon!,
               destLat: destinationLoc?.osm_object.lat!,
               destLon: destinationLoc?.osm_object.lon!,
+              reroute: true,
+              startEdgeId: snappedEdgeID,
             };
             const newSpRouteData = await fetchRouteCRP(reqBody);
             setRouteData((prev) => {
@@ -724,7 +778,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!routeData || routeData.length === 0) {
-      setActiveRoute(0);
+      if (activeRoute !== 0) setActiveRoute(0);
       return;
     }
 
