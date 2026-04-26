@@ -14,6 +14,7 @@ import {
 // @ts-ignore
 import "maplibre-gl/dist/maplibre-gl.css"; // See notes below
 import { useEffect, useMemo, useState, useRef } from "react";
+import maplibregl from "maplibre-gl";
 import toast from "react-hot-toast";
 import { LineData, MapComponentProps } from "../types/definition";
 import Image from "next/image";
@@ -22,7 +23,6 @@ import { FaLocationArrow } from "react-icons/fa";
 import polyline from "@mapbox/polyline";
 import { haversineDistance } from "../lib/util";
 
-const faLocationArrowDegree = 45.0; // in degrees
 const ACTIVE_ROUTE_COLOR = "#470DF9";
 const ACTIVE_ROUTE_OPACITY = 0.9;
 const ACTIVE_ROUTE_WIDTH_BY_ZOOM = [
@@ -51,10 +51,14 @@ export const MapComponent = React.memo(function MapComponent({
   onSelectSource,
   onSelectDestination,
   matchedGpsLoc,
+  rawGpsLoc,
   gpsWindowPoints,
   routeStarted,
   userHeading,
   onMapClick,
+  isSimulation,
+  currentGpsLocRef,
+  currentHeadingRef,
 }: MapComponentProps) {
   const [contextMenuCoord, setContextMenuCoord] = useState<{
     lng: number;
@@ -64,13 +68,39 @@ export const MapComponent = React.memo(function MapComponent({
 
   const [boundingBoxGeoJSON, setBoundingBoxGeoJSON] = useState<any>(null);
 
-  const [viewState, setViewState] = React.useState({
+  const [viewState, setViewState] = React.useState<{
+    longitude: number;
+    latitude: number;
+    zoom: number;
+    bearing: number;
+    pitch: number;
+  }>({
     longitude: 110.37432,
     latitude: -7.78787,
     zoom: 13,
+    bearing: 0,
+    pitch: 0,
   });
   
+  const [isAutoCentering, setIsAutoCentering] = useState(true);
+  const autoCenterTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isProgrammaticUpdateRef = useRef(false);
+
+  // Auto-centering re-enable logic
+  const startAutoCenterTimer = () => {
+    if (autoCenterTimerRef.current) clearTimeout(autoCenterTimerRef.current);
+    autoCenterTimerRef.current = setTimeout(() => {
+      setIsAutoCentering(true);
+    }, 3000);
+  };
+
+
+
+  useEffect(() => {
+    return () => {
+      if (autoCenterTimerRef.current) clearTimeout(autoCenterTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchBoundingBox = async () => {
@@ -124,11 +154,19 @@ export const MapComponent = React.memo(function MapComponent({
   }
 
   useEffect(() => {
-    if (routeStarted && matchedGpsLoc && mapRef.current) {
+    if (routeStarted && matchedGpsLoc && mapRef.current && isAutoCentering) {
+      const padding = {
+        top: window.innerHeight * (2 / 3), // 5:6 ratio (approx: user at 5/6 height)
+        bottom: 0,
+        left: 0,
+        right: 0
+      };
+
       mapRef.current.jumpTo({
         center: [matchedGpsLoc.lon, matchedGpsLoc.lat],
         bearing: userHeading,
-        zoom: 16,
+        zoom: 17,
+        padding: padding,
       });
       return;
     }
@@ -159,16 +197,18 @@ export const MapComponent = React.memo(function MapComponent({
     matchedGpsLoc,
     routeDataCRP,
     userHeading,
+    isAutoCentering,
   ]);
 
   useEffect(() => {
     const turn = routeDataCRP?.[activeRoute]?.driving_directions?.[nextTurnIndex];
     if (nextTurnIndex != -1 && turn) {
-      setViewState({
+      setViewState(prev => ({
+        ...prev,
         longitude: turn.turn_point.lon,
         latitude: turn.turn_point.lat,
         zoom: 17,
-      });
+      }));
     }
   }, [nextTurnIndex, routeDataCRP, activeRoute]);
 
@@ -242,13 +282,23 @@ export const MapComponent = React.memo(function MapComponent({
 
   return (
     <Map
-      initialViewState={viewState}
-      bearing={routeStarted ? userHeading : 0}
+      {...viewState}
+      bearing={isAutoCentering && routeStarted ? userHeading : viewState.bearing}
       style={{ width: "100vw", height: "100vh" }}
       onMove={(evt) => {
+        setViewState(evt.viewState);
         if (evt.originalEvent) {
-          setViewState(evt.viewState);
+          setIsAutoCentering(false);
+          startAutoCenterTimer();
         }
+      }}
+      onMoveStart={(evt) => {
+        if (evt.originalEvent) {
+          setIsAutoCentering(false);
+        }
+      }}
+      onDragStart={() => {
+        setIsAutoCentering(false);
       }}
       mapStyle="https://tiles.openfreemap.org/styles/liberty"
       onContextMenu={(evt) => {
@@ -263,6 +313,7 @@ export const MapComponent = React.memo(function MapComponent({
       onLoad={(e) => {
         mapRef.current = e.target;
         e.target.touchZoomRotate.enableRotation();
+        e.target.touchZoomRotate.enable();
       }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -278,6 +329,33 @@ export const MapComponent = React.memo(function MapComponent({
               "circle-stroke-width": 1,
               "circle-stroke-color": "#FFFFFF",
               "circle-opacity": 0.6,
+            }}
+          />
+        </Source>
+      )}
+
+      {isSimulation && rawGpsLoc && (
+        <Source
+          id="raw-gps-source"
+          type="geojson"
+          data={{
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [rawGpsLoc.lon, rawGpsLoc.lat],
+            },
+            properties: {},
+          }}
+        >
+          <Layer
+            id="raw-gps-layer"
+            type="circle"
+            paint={{
+              "circle-radius": 6,
+              "circle-color": "#00FF00",
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#FFFFFF",
+              "circle-opacity": 0.8,
             }}
           />
         </Source>
@@ -345,8 +423,7 @@ export const MapComponent = React.memo(function MapComponent({
           </Source>
       )}
 
-      {!isDirectionActive &&
-        alternativeRoutes?.length != 0 &&
+      {alternativeRoutes?.length != 0 &&
         alternativeRoutes
           ?.filter((_, i) => i !== 0 && i !== activeRoute)
           .map((route, index) => {
@@ -370,8 +447,8 @@ export const MapComponent = React.memo(function MapComponent({
                   source={`polyline-source-${index}`}
                   paint={{
                     "line-color": ACTIVE_ROUTE_COLOR,
-                    "line-width": 3,
-                    "line-opacity": 0.3,
+                    "line-width": 4,
+                    "line-opacity": 0.35,
                   }}
                 />
               </Source>
@@ -430,7 +507,6 @@ export const MapComponent = React.memo(function MapComponent({
           );
         })}
 
-      {/* active route is shortest path route */}
       {activeRoute == 0 && spRouteGeoJSON && (
         <>
           <Source
@@ -452,28 +528,13 @@ export const MapComponent = React.memo(function MapComponent({
         </>
       )}
 
-      {routeStarted && matchedGpsLoc && (
-        <Marker
-          latitude={matchedGpsLoc.lat}
-          longitude={matchedGpsLoc.lon}
-          rotation={userHeading }
-          rotationAlignment="map"
-          anchor="center"
-        >
-          <div
-            className="bg-[#F7FBFA]/50 flex items-center justify-center
-           rounded-full w-[50px] h-[50px]  "
-          >
-            <img
-              src={"navigation_material.svg"}
-              alt="navigation icon"
-              width={30}
-              height={30}
-            />
-          </div>
-        </Marker>
+      {routeStarted && currentGpsLocRef && currentHeadingRef && (
+        <ImperativeNavigationMarker 
+          currentGpsLocRef={currentGpsLocRef}
+          currentHeadingRef={currentHeadingRef}
+          routeStarted={routeStarted}
+        />
       )}
-
       {contextMenuCoord && (
         <Popup
           longitude={contextMenuCoord.lng}
@@ -552,6 +613,22 @@ export const MapComponent = React.memo(function MapComponent({
           />
         </Source>
       )}
+
+      {/* Recenter Button */}
+      {routeStarted && !isAutoCentering && (
+        <div 
+          className="absolute bottom-10 right-4 z-50"
+          style={{ pointerEvents: 'auto' }}
+        >
+          <button
+            onClick={() => setIsAutoCentering(true)}
+            className="flex items-center gap-2 bg-white px-6 py-3 rounded-full shadow-xl border border-gray-100 transition-all hover:scale-105 active:scale-95"
+          >
+            <FaLocationArrow className="text-[#008080] -rotate-45" size={20} />
+            <span className="text-[#008080] font-bold text-lg">Re-center</span>
+          </button>
+        </div>
+      )}
     </Map>
   );
 });
@@ -582,41 +659,7 @@ function getTurnIconDirection(turnType: string): string {
   return "";
 }
 
-function getMidpoint(coordinates: number[][]): [number, number] {
-  if (coordinates.length === 0) return [0, 0];
-  if (coordinates.length === 1) return [coordinates[0][0], coordinates[0][1]];
 
-  let totalDistance = 0;
-  const distances: number[] = [];
-
-  for (let i = 0; i < coordinates.length - 1; i++) {
-    const d = haversineDistance(
-      coordinates[i][1], // lat1
-      coordinates[i][0], // lon1
-      coordinates[i + 1][1], // lat2
-      coordinates[i + 1][0]  // lon2
-    );
-    distances.push(d);
-    totalDistance += d;
-  }
-
-  const targetDistance = totalDistance / 2;
-  let currentDistance = 0;
-
-  for (let i = 0; i < distances.length; i++) {
-    if (currentDistance + distances[i] >= targetDistance) {
-      const remaining = targetDistance - currentDistance;
-      const fraction = distances[i] === 0 ? 0 : remaining / distances[i];
-      return [
-        coordinates[i][0] + (coordinates[i + 1][0] - coordinates[i][0]) * fraction,
-        coordinates[i][1] + (coordinates[i + 1][1] - coordinates[i][1]) * fraction,
-      ];
-    }
-    currentDistance += distances[i];
-  }
-
-  return [coordinates[coordinates.length - 1][0], coordinates[coordinates.length - 1][1]];
-}
 
 function findClosestPointOnRoute(
   lon: number,
@@ -731,3 +774,56 @@ function latToMercator(lat: number): number {
   const sin = Math.sin((lat * Math.PI) / 180);
   return Math.log((1 + sin) / (1 - sin)) / 2;
 }
+
+const ImperativeNavigationMarker = ({ 
+  currentGpsLocRef, 
+  currentHeadingRef,
+  routeStarted
+}: { 
+  currentGpsLocRef: React.RefObject<any>, 
+  currentHeadingRef: React.RefObject<number>,
+  routeStarted: boolean
+}) => {
+  const [pos, setPos] = useState<[number, number]>([0, 0]);
+  const [heading, setHeading] = useState<number>(0);
+
+  useEffect(() => {
+    if (!routeStarted) return;
+
+    let frameId: number;
+    const update = () => {
+      if (currentGpsLocRef.current) {
+        setPos([currentGpsLocRef.current.lon, currentGpsLocRef.current.lat]);
+        setHeading(currentHeadingRef.current || 0);
+      }
+      frameId = requestAnimationFrame(update);
+    };
+    frameId = requestAnimationFrame(update);
+
+    return () => cancelAnimationFrame(frameId);
+  }, [routeStarted]);
+
+  if (!routeStarted || (pos[0] === 0 && pos[1] === 0)) return null;
+
+  return (
+    <Marker
+      longitude={pos[0]}
+      latitude={pos[1]}
+      rotation={heading}
+      rotationAlignment="map"
+      anchor="center"
+    >
+      <div
+        className="bg-[#F7FBFA]/50 flex items-center justify-center
+       rounded-full w-[50px] h-[50px]"
+      >
+        <img
+          src={"/navigation_material.svg"}
+          alt="navigation icon"
+          width={30}
+          height={30}
+        />
+      </div>
+    </Marker>
+  );
+};

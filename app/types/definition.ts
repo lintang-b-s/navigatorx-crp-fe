@@ -58,10 +58,14 @@ export type MapComponentProps = {
   onSelectSource: (place: Place) => void;
   onSelectDestination: (place: Place) => void;
   matchedGpsLoc: Coord | undefined;
+  rawGpsLoc?: Coord | undefined;
   gpsWindowPoints?: Coord[];
   routeStarted: boolean;
   userHeading: number;
   onMapClick?: (lat: number, lon: number) => void;
+  isSimulation?: boolean;
+  currentGpsLocRef?: React.RefObject<Coord | null>;
+  currentHeadingRef?: React.RefObject<number>;
 };
 
 export type LineData = {

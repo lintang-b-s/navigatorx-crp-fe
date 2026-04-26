@@ -5,15 +5,15 @@ import toast from "react-hot-toast";
 import { SimulationPanel } from "@/app/ui/simulationPanel";
 import { Coord, MapMatchRequest, Candidate } from "@/app/lib/mapmatchApi";
 import { haversineDistance, project, gt } from "@/app/lib/util";
-import { useDeviceOrientation } from "@/app/hook";
 import gsap from "gsap";
-import { fetchRouteCRP, RouteCRPResponse } from "@/app/lib/navigatorxApi";
+import { fetchRouteCRP, RouteCRPResponse, fetchAlternativeRoutes } from "@/app/lib/navigatorxApi";
 import { LineData } from "@/app/types/definition";
 import polyline from "@mapbox/polyline";
 import { 
   getCurrentUserDirectionIndex, 
   getDistanceFromUserToNextTurn, 
-  isUserOffTheRoute 
+  isUserOffTheRoute,
+  isNearEndOfSuggestAlternativesStep 
 } from "@/app/lib/routing";
 import { getTurnIcon } from "@/app/ui/routing";
 import Image from "next/image";
@@ -24,8 +24,10 @@ import {
   THROTTLE_HEADING_THRESHOLD,
   INVALID_LAT,
   INVALID_LON,
-  MIN_SPEED_THRESHOLD
+  MIN_SPEED_THRESHOLD,
+  UPDATE_NAVIGATION_STATE_THRESHOLD_MS
 } from "@/app/lib/constants";
+
 
 const MapComponent = dynamic(
   () => import("@/app/ui/map").then((mod) => mod.MapComponent),
@@ -48,11 +50,16 @@ export default function SimulationPage() {
   const [simulationState, setSimulationState] = useState<{
     matchedGpsLoc: Coord | undefined;
     matchedHeading: number;
+    distanceFromNextTurnPoint: number;
+    currentDirectionIndex: number;
   }>({
     matchedGpsLoc: undefined,
     matchedHeading: 0,
+    distanceFromNextTurnPoint: 0,
+    currentDirectionIndex: 0,
   });
-  const { matchedGpsLoc, matchedHeading } = simulationState;
+  const [rawGpsLoc, setRawGpsLoc] = useState<Coord | undefined>(undefined);
+  const { matchedGpsLoc, matchedHeading, distanceFromNextTurnPoint, currentDirectionIndex } = simulationState;
   const [isRunning, setIsRunning] = useState(false);
   const stopSimulationRef = useRef(false);
   const currentGpsLocRef = useRef<Coord | null>(null);
@@ -67,10 +74,9 @@ export default function SimulationPage() {
   // Routing states
   const [routeData, setRouteData] = useState<RouteCRPResponse[]>([]);
   const [activeRoute, setActiveRoute] = useState(0);
-  const [distanceFromNextTurnPoint, setDistanceFromNextTurnPoint] = useState<number>(0);
-  const [currentDirectionIndex, setCurrentDirectionIndex] = useState(0);
   const [snappedEdgeID, setSnappedEdgeID] = useState<number>(-1);
   const [polylineData, setPolylineData] = useState<LineData>();
+  const [alternativeRoutesLineData, setAlternativeRoutesLineData] = useState<LineData[]>([]);
   const [isDrivingDirectionEnabled, setIsDrivingDirectionEnabled] = useState(false);
   
   // States for simplified UI
@@ -80,9 +86,13 @@ export default function SimulationPage() {
   const isUsingWebSocketRef = useRef(false);
   const routeDataRef = useRef<RouteCRPResponse[]>([]);
   const activeRouteRef = useRef(0);
+  const snappedEdgeIDRef = useRef(-1);
+
+  useEffect(() => { routeDataRef.current = routeData; }, [routeData]);
+  useEffect(() => { activeRouteRef.current = activeRoute; }, [activeRoute]);
+  useEffect(() => { snappedEdgeIDRef.current = snappedEdgeID; }, [snappedEdgeID]);
 
   // Memoized props for MapComponent to prevent unnecessary re-renders
-  const memoizedAlternativeRoutes = useMemo(() => [], []);
   const handleSelectSource = useCallback(() => {}, []);
   const handleSelectDestination = useCallback(() => {}, []);
 
@@ -90,12 +100,12 @@ export default function SimulationPage() {
     setIsRunning(false);
     stopSimulationRef.current = true;
     setGpsWindowPoints([]);
+    setRawGpsLoc(undefined);
   }, []);
 
   const onSimulationStart = useCallback(async (
     points: any[], 
     useWebSocket: boolean, 
-    samplingRate: number, 
     showGpsWindow: boolean, 
     drivingDirection: boolean,
     writeToLog: boolean,
@@ -125,11 +135,15 @@ export default function SimulationPage() {
     let lastDirectionIndex = -1;
     let lastDist = -1;
     let lastGpsWindowStr = "";
+    let lastFetchedAlternativesStep = -1;
 
     setSimulationState({
       matchedGpsLoc: undefined,
       matchedHeading: 0,
+      distanceFromNextTurnPoint: 0,
+      currentDirectionIndex: 0,
     });
+    setRawGpsLoc(undefined);
 
     if (drivingDirection) {
       try {
@@ -141,11 +155,20 @@ export default function SimulationPage() {
           destLat: lastPoint.Latitude,
           destLon: lastPoint.Longitude,
         };
-        const spRouteData = await fetchRouteCRP(reqBody);
-        setRouteData([spRouteData.data]);
-        routeDataRef.current = [spRouteData.data];
+        const [newSpRouteData, alternativeRouteData] = await Promise.all([
+          fetchRouteCRP(reqBody),
+          fetchAlternativeRoutes(reqBody),
+        ]);
+
+        const combinedRoutes = [
+          newSpRouteData.data,
+          ...(alternativeRouteData.data.alternative_routes || []),
+        ];
+
+        setRouteData(combinedRoutes);
+        routeDataRef.current = combinedRoutes;
         
-        const coords = polyline.decode(spRouteData.data.path);
+        const coords = polyline.decode(newSpRouteData.data.path);
         const linedata: LineData = {
           type: "Feature",
           geometry: {
@@ -154,6 +177,32 @@ export default function SimulationPage() {
           },
         };
         setPolylineData(linedata);
+
+        const alternativesPolyline = (alternativeRouteData.data.alternative_routes || []).map((route) => {
+          const coords = polyline.decode(route.path);
+          return {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: coords.map((coord) => [coord[1], coord[0]]),
+            },
+          } as LineData;
+        });
+        
+        // In simulation, alternativeRoutesLineData includes a dummy at index 0 
+        // to align with routeData (where index 0 is the main route)
+        const dummyRoute: LineData = {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [-100, 40],
+              [-100, 40],
+            ],
+          },
+        };
+        setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
+
         setActiveRoute(0);
         activeRouteRef.current = 0;
       } catch (error: any) {
@@ -186,7 +235,7 @@ export default function SimulationPage() {
       });
     }
 
-    const httpUrl = process.env.NEXT_PUBLIC_MAP_MATCH_HTTP_URL || "http://localhost:6161/api/onlineMapMatch";
+    const httpUrl = process.env.NEXT_PUBLIC_MAP_MATCH_HTTP_URL || "http://localhost:6060/api/onlineMapMatch";
 
     let accumulatedDt = 0;
     for (let i = 0; i < points.length; i++) {
@@ -246,9 +295,9 @@ export default function SimulationPage() {
         await new Promise((resolve) => setTimeout(resolve, delay * 1000));
         continue;
       }
-
-      // Only send request if accumulatedDt >= samplingRate or it's the first point
-      if (i === 0 || accumulatedDt >= samplingRate) {
+      // Only send request if accumulatedDt >= 1.0 or it's the first point
+      if (i === 0 || accumulatedDt >= 1.0) {
+        setRawGpsLoc({ lat: point.Latitude, lon: point.Longitude });
         mapMatchRequest = {
           gps_point: {
             lat: point.Latitude,
@@ -394,7 +443,10 @@ export default function SimulationPage() {
                 // Ensure directionsIndex is valid
                 const safeIndex = Math.min(Math.max(0, directionsIndex), usedRoute.driving_directions.length - 1);
                 if (safeIndex !== lastDirectionIndex) {
-                  setCurrentDirectionIndex(safeIndex);
+                  setSimulationState(prev => ({
+                    ...prev,
+                    currentDirectionIndex: safeIndex
+                  }));
                   lastDirectionIndex = safeIndex;
                 }
 
@@ -407,16 +459,88 @@ export default function SimulationPage() {
                   
                   // Only update distance if it changed significantly (e.g. > 1m) to reduce re-renders
                   if (Math.abs(newDist - lastDist) > 1) {
-                    setDistanceFromNextTurnPoint(newDist);
+                    setSimulationState(prev => ({
+                      ...prev,
+                      distanceFromNextTurnPoint: newDist
+                    }));
                     lastDist = newDist;
                   }
                 }
 
+                // Check for dynamic alternatives trigger
+                if (isNearEndOfSuggestAlternativesStep({
+                  snappedEdgeID: currentEdgeID,
+                  drivingDirections: usedRoute.driving_directions,
+                  currentIndex: safeIndex
+                }) && safeIndex !== lastFetchedAlternativesStep) {
+                  lastFetchedAlternativesStep = safeIndex;
+                  (async () => {
+                    try {
+                      const lastPoint = points[points.length - 1];
+                      const altResponse = await fetchAlternativeRoutes({
+                        srcLat: currentMatchedLoc.lat,
+                        srcLon: currentMatchedLoc.lon,
+                        destLat: lastPoint.Latitude,
+                        destLon: lastPoint.Longitude,
+                        reroute: true,
+                        startEdgeId: currentEdgeID,
+                      });
+
+                      const newAlternatives = altResponse.data.alternative_routes || [];
+                      if (newAlternatives.length > 0) {
+                        const mainRoute = routeDataRef.current[0];
+                        const combinedRoutes = [mainRoute, ...newAlternatives];
+                        setRouteData(combinedRoutes);
+                        routeDataRef.current = combinedRoutes;
+
+                        const alternativesPolyline = newAlternatives.map((route) => {
+                          const coords = polyline.decode(route.path);
+                          return {
+                            type: "Feature",
+                            geometry: {
+                              type: "LineString",
+                              coordinates: coords.map((coord) => [coord[1], coord[0]]),
+                            },
+                          } as LineData;
+                        });
+
+                        const dummyRoute: LineData = {
+                          type: "Feature",
+                          geometry: {
+                            type: "LineString",
+                            coordinates: [[-100, 40], [-100, 40]],
+                          },
+                        };
+                        setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
+                      }
+                    } catch (e) {
+                      console.error("Failed to fetch alternatives dynamically:", e);
+                    }
+                  })();
+                }
+
                 // Re-routing logic: trigger only if the user is on a valid edge and off the route
-                const isOffTheRoute = isUserOffTheRoute({
+                let isOffTheRoute = isUserOffTheRoute({
                   snappedEdgeID: currentEdgeID,
                   routeData: usedRoute,
                 });
+
+                if (isOffTheRoute && currentEdgeID !== -1) {
+                  // Check if the user moved to another existing route
+                  const otherRouteIndex = routeDataRef.current.findIndex((route, idx) => 
+                    idx !== activeRouteRef.current && !isUserOffTheRoute({ snappedEdgeID: currentEdgeID, routeData: route })
+                  );
+
+                  if (otherRouteIndex !== -1) {
+                    setActiveRoute(otherRouteIndex);
+                    activeRouteRef.current = otherRouteIndex;
+                    isOffTheRoute = false; // Not actually off all routes
+                    toast.success(`Switched to alternative route ${otherRouteIndex + 1}`);
+                    
+                    // Reset direction tracking for the new route
+                    lastDirectionIndex = -1;
+                  }
+                }
 
                 if (isOffTheRoute && currentEdgeID !== -1) {
                   try {
@@ -429,9 +553,18 @@ export default function SimulationPage() {
                       reroute: true,
                       startEdgeId: currentEdgeID,
                     };
-                    const newSpRouteData = await fetchRouteCRP(reqBody);
-                    setRouteData([newSpRouteData.data]);
-                    routeDataRef.current = [newSpRouteData.data];
+                    const [newSpRouteData, alternativeRouteData] = await Promise.all([
+                      fetchRouteCRP(reqBody),
+                      fetchAlternativeRoutes(reqBody),
+                    ]);
+
+                    const combinedRoutes = [
+                      newSpRouteData.data,
+                      ...(alternativeRouteData.data.alternative_routes || []),
+                    ];
+
+                    setRouteData(combinedRoutes);
+                    routeDataRef.current = combinedRoutes;
                     const coords = polyline.decode(newSpRouteData.data.path);
                     const newLinedata: LineData = {
                       type: "Feature",
@@ -441,6 +574,33 @@ export default function SimulationPage() {
                       },
                     };
                     setPolylineData(newLinedata);
+
+                    const alternativesPolyline = (alternativeRouteData.data.alternative_routes || []).map((route) => {
+                      const coords = polyline.decode(route.path);
+                      return {
+                        type: "Feature",
+                        geometry: {
+                          type: "LineString",
+                          coordinates: coords.map((coord) => [coord[1], coord[0]]),
+                        },
+                      } as LineData;
+                    });
+                    
+                    const dummyRoute: LineData = {
+                      type: "Feature",
+                      geometry: {
+                        type: "LineString",
+                        coordinates: [
+                          [-100, 40],
+                          [-100, 40],
+                        ],
+                      },
+                    };
+                    setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
+                    
+                    // Reset active route to 0 after reroute
+                    setActiveRoute(0);
+                    activeRouteRef.current = 0;
                     
                     if (writeToLog) {
                       logResultsRef.current.push({
@@ -477,7 +637,7 @@ export default function SimulationPage() {
       const content = logResultsRef.current
         .map((res) => `${res.edge_id},${res.lat},${res.lon}`)
         .join("\n");
-      
+       
       const blob = new Blob([content], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -504,6 +664,9 @@ export default function SimulationPage() {
     let lastLat = 0;
     let lastLon = 0;
     let lastH = 0;
+    let lastDistToTurn = 0;
+    let lastDirIndex = -1;
+    let lastUpdateTimestamp = 0;
 
     const sync = () => {
       if (currentGpsLocRef.current) {
@@ -511,19 +674,55 @@ export default function SimulationPage() {
         const curLon = currentGpsLocRef.current.lon;
         const curH = normalizeBearing(currentHeadingRef.current);
         
-        // Only update state if values changed significantly
+        // 1. Calculate routing state
+        let updatedState: any = {};
+        let stateChanged = false;
+
+        const usedRoute = routeDataRef.current?.[activeRouteRef.current];
+        if (usedRoute) {
+          const usedRouteDirections = usedRoute.driving_directions;
+          const directionsIndex = getCurrentUserDirectionIndex({
+            snappedEdgeID: snappedEdgeIDRef.current,
+            drivingDirections: usedRouteDirections,
+          });
+          
+          if (directionsIndex !== lastDirIndex) {
+            updatedState.currentDirectionIndex = directionsIndex;
+            lastDirIndex = directionsIndex;
+            stateChanged = true;
+          }
+
+          const dToTurn = getDistanceFromUserToNextTurn({
+            matchedGpsLoc: { lat: curLat, lon: curLon },
+            nextTurnPoint: usedRouteDirections[directionsIndex].turn_point,
+          }) * 1000.0;
+          
+          if (Math.abs(dToTurn - lastDistToTurn) > 1) {
+            updatedState.distanceFromNextTurnPoint = dToTurn;
+            lastDistToTurn = dToTurn;
+            stateChanged = true;
+          }
+        }
+
+        // 2. Throttled position update
         const p1 = project(lastLat, lastLon);
         const p2 = project(curLat, curLon);
         const dist = Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
         
-        if (gt(dist, THROTTLE_DISTANCE_THRESHOLD) || gt(Math.abs(curH - lastH), THROTTLE_HEADING_THRESHOLD)) {
-          setSimulationState({
-            matchedGpsLoc: { lat: curLat, lon: curLon },
-            matchedHeading: curH,
-          });
+        // Threshold: 0.5m or 2 degrees
+        if (dist > 0.5 || Math.abs(curH - lastH) > 2) {
+          updatedState.matchedGpsLoc = { lat: curLat, lon: curLon };
+          updatedState.matchedHeading = curH;
           lastLat = curLat;
           lastLon = curLon;
           lastH = curH;
+          stateChanged = true;
+        }
+
+        const now = Date.now();
+        if (stateChanged && now - lastUpdateTimestamp > UPDATE_NAVIGATION_STATE_THRESHOLD_MS) {
+          setSimulationState(prev => ({ ...prev, ...updatedState }));
+          lastUpdateTimestamp = now;
         }
       }
       frameId = requestAnimationFrame(sync);
@@ -537,17 +736,21 @@ export default function SimulationPage() {
       <MapComponent
         lineData={polylineData}
         onUserLocationUpdateHandler={onUserLocationUpdateHandler}
-        alternativeRoutes={memoizedAlternativeRoutes}
+        alternativeRoutes={alternativeRoutesLineData}
         activeRoute={activeRoute}
         isDirectionActive={isDrivingDirectionEnabled && isRunning}
-        routeDataCRP={routeData}
+        routeDataCRP={routeData || []}
         nextTurnIndex={-1}
         onSelectSource={handleSelectSource}
         onSelectDestination={handleSelectDestination}
         routeStarted={true} // Must be true to show the car marker
         matchedGpsLoc={matchedGpsLoc}
+        rawGpsLoc={rawGpsLoc}
         gpsWindowPoints={gpsWindowPoints}
         userHeading={matchedHeading}
+        isSimulation={true}
+        currentGpsLocRef={currentGpsLocRef}
+        currentHeadingRef={currentHeadingRef}
       />
       
       {isRunning && isDrivingDirectionEnabled && (
