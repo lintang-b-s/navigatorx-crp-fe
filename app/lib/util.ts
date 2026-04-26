@@ -46,12 +46,22 @@ export function haversineDistance(
 
   return EARTH_RADIUS_KM * c;
 }
-
+// mercator
 export function project(lat: number, lon: number): { x: number; y: number } {
   const R = 6378137;
   const x = R * toRadians(lon);
   const y = R * Math.log(Math.tan(Math.PI / 4 + toRadians(lat) / 2));
   return { x, y };
+}
+
+export function mercatorDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const p1 = project(lat1, lon1);
+  const p2 = project(lat2, lon2);
+  return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+}
+
+export function mercatorDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  return mercatorDistance(lat1, lon1, lat2, lon2) / 1000;
 }
 
 export { EPS };

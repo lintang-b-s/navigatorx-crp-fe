@@ -63,3 +63,18 @@ export function getDistanceFromUserToNextTurn({
     nextTurnPoint.lon
   );
 }
+export function isNearEndOfSuggestAlternativesStep({
+  snappedEdgeID,
+  drivingDirections,
+  currentIndex,
+}: {
+  snappedEdgeID: number;
+  drivingDirections: Direction[];
+  currentIndex: number;
+}): boolean {
+  const currentDirection = drivingDirections[currentIndex];
+  if (!currentDirection || !currentDirection.suggest_alternatives) return false;
+
+  const lastThreeEdges = currentDirection.edge_ids.slice(-3);
+  return lastThreeEdges.includes(snappedEdgeID);
+}

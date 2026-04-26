@@ -13,6 +13,7 @@ export interface Direction {
   polyline: string;
   turn_bearing: number;
   turn_type: string;
+  suggest_alternatives?: boolean;
 }
 
 export interface CumulativeDirection extends Direction {
@@ -55,24 +56,7 @@ export interface AlternativeRoutesResponse {
   };
 }
 
-// for https://github.com/lintang-b-s/navigatorX-CH
-export const fetchRoute = async ({
-  srcLat,
-  srcLon,
-  destLat,
-  destLon,
-}: RouteRequest): Promise<RouteResponse> => {
-  try {
-    const { data } = await axios.get(
-      `${process.env.NEXT_PUBLIC_NAV_CH_API_URL}/api/navigations/shortest-path?src_lat=${srcLat}&src_lon=${srcLon}&dst_lat=${destLat}&dst_lon=${destLon}`,
-      {}
-    );
 
-    return data;
-  } catch (error) {
-    throw new Error("Failed to fetch search results");
-  }
-};
 
 // for https://github.com/lintang-b-s/Navigatorx
 export const fetchRouteCRP = async ({
@@ -124,15 +108,22 @@ export const fetchAlternativeRoutes = async ({
   srcLon,
   destLat,
   destLon,
+  reroute = false,
+  startEdgeId,
 }: RouteRequest): Promise<AlternativeRoutesResponse> => {
   try {
-    const { data } = await axios.get(
-      `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2`,
-      {}
-    );
+    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2${reroute ? "&reroute=true" : ""}`;
+
+    if (startEdgeId !== undefined && startEdgeId !== -1) {
+      url += `&start_edge_id=${startEdgeId}`;
+    }
+
+    const { data } = await axios.get(url, {});
 
     return data;
   } catch (error) {
     throw new Error("Failed to fetch search results");
   }
 };
+
+

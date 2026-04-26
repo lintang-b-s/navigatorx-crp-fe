@@ -10,7 +10,6 @@ interface SimulationPanelProps {
   onSimulationStart: (
     points: any[], 
     useWebSocket: boolean, 
-    samplingRate: number, 
     showGpsWindow: boolean, 
     drivingDirection: boolean,
     writeToLog: boolean,
@@ -31,7 +30,6 @@ export const SimulationPanel = React.memo(function SimulationPanel({
   const [gpxTracks, setGpxTracks] = useState<string[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<string>("");
   const [isScanning, setIsScanning] = useState(false);
-  const [samplingRate, setSamplingRate] = useState(1.0);
   const [showGpsWindow, setShowGpsWindow] = useState(false);
   const [drivingDirection, setDrivingDirection] = useState(false);
   const [writeToLog, setWriteToLog] = useState(false);
@@ -125,7 +123,6 @@ export const SimulationPanel = React.memo(function SimulationPanel({
       onSimulationStart(
         points, 
         useWebSocket, 
-        samplingRate, 
         showGpsWindow, 
         drivingDirection,
         writeToLog,
@@ -140,9 +137,9 @@ export const SimulationPanel = React.memo(function SimulationPanel({
 
   return (
     <div
-      className={`flex flex-col ${gpxTracks.length > 0 ? "h-[430px]" : "h-[360px]"} w-[94vw] sm:${gpxTracks.length > 0 ? "h-[450px]" : "h-[380px]"} sm:w-[460px]  
+      className={`flex flex-col h-auto w-[94vw] sm:w-[460px]  
         absolute top-4 left-1/2 -translate-x-1/2 sm:left-4 sm:translate-x-0 md:left-10 bg-white
-        rounded-2xl overflow-hidden shadow-2xl z-10 p-6 transition-all duration-300`}
+        rounded-2xl shadow-2xl z-10 p-6 transition-all duration-300`}
     >
       <h2 className="text-xl font-bold mb-4">Map Matching Simulation</h2>
       
@@ -174,22 +171,6 @@ export const SimulationPanel = React.memo(function SimulationPanel({
           </div>
         )}
 
-        <div className="flex flex-col gap-1">
-          <div className="flex justify-between items-center ml-1">
-            <label className="text-xs font-semibold text-gray-500">Sampling Rate</label>
-            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{samplingRate.toFixed(1)}s</span>
-          </div>
-          <input 
-            type="range" 
-            min="0.2" 
-            max="10.0" 
-            step="0.1" 
-            value={samplingRate}
-            onChange={(e) => setSamplingRate(parseFloat(e.target.value))}
-            className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-500"
-            disabled={isRunning}
-          />
-        </div>
 
         <div className="flex flex-col gap-2 mt-1">
           <label className="flex flex-row items-center cursor-pointer select-none">
