@@ -160,9 +160,17 @@ export default function SimulationPage() {
           fetchAlternativeRoutes(reqBody),
         ]);
 
+        newSpRouteData.data.distance = parseFloat(
+          (newSpRouteData.data.distance / 1000).toFixed(2)
+        );
+        const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
+        newAlternatives.forEach((alt: any) => {
+          alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
+        });
+
         const combinedRoutes = [
           newSpRouteData.data,
-          ...(alternativeRouteData.data.alternative_routes || []),
+          ...newAlternatives,
         ];
 
         setRouteData(combinedRoutes);
@@ -558,9 +566,17 @@ export default function SimulationPage() {
                       fetchAlternativeRoutes(reqBody),
                     ]);
 
+                    newSpRouteData.data.distance = parseFloat(
+                      (newSpRouteData.data.distance / 1000).toFixed(2)
+                    );
+                    const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
+                    newAlternatives.forEach((alt: any) => {
+                      alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
+                    });
+
                     const combinedRoutes = [
                       newSpRouteData.data,
-                      ...(alternativeRouteData.data.alternative_routes || []),
+                      ...newAlternatives,
                     ];
 
                     setRouteData(combinedRoutes);

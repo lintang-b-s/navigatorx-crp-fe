@@ -24,10 +24,16 @@ import { AiOutlineThunderbolt } from "react-icons/ai";
 
 import { FaCheck } from "react-icons/fa";
 
-const formatMinutes = (minutes: number): string => {
+const formatTime = (minutes: number): string => {
   return new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 1,
+    maximumFractionDigits: 2,
   }).format(minutes);
+};
+
+const formatDistance = (distance: number): string => {
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 2,
+  }).format(distance);
 };
 
 export const Router = React.memo(function Router(props: RouterProps) {
@@ -241,9 +247,9 @@ function showRouteResultMobile(
     <div
       className={`sm:hidden flex flex-col ${
         routeStarted
-          ? "h-[150px] bg-[#222831] w-[94vw] rounded-2xl top-4"
-          : "max-h-[50vh] bg-white mt-4 w-[94vw] rounded-2xl top-0"
-      } absolute left-1/2 -translate-x-1/2 overflow-y-auto shadow-2xl z-10`}
+          ? "bg-[#222831]/95 backdrop-blur-md w-[94vw] rounded-2xl top-4 p-4 shadow-xl border border-white/10"
+          : `${showDirections ? "max-h-[260px]" : "max-h-[50vh]"} bg-white mt-4 w-[94vw] rounded-2xl top-0 shadow-2xl`
+      } absolute left-1/2 -translate-x-1/2 overflow-y-auto z-10`}
     >
       {!routeStarted ? (
         showDirections ? (
@@ -295,7 +301,7 @@ function showRouteResultMobile(
                   index == routeDirections!.length - 1
                     ? "border-b-[1px] mb-10"
                     : ""
-                }  border-[#D3DAE0] cursor-pointer group py2 `}
+                }  border-[#D3DAE0] cursor-pointer group py-2 `}
                 onClick={() => {
                   handleSetNextTurnIndex(index);
                 }}
@@ -317,8 +323,8 @@ function showRouteResultMobile(
                     </p>
                   </div>
                   <p className="text-sm font-light">
-                    {formatMinutes(direction.cumulativeEta)} menit (
-                    {Math.round(direction.cumulativeDistance)} m)
+                    {formatTime(direction.cumulativeEta)} menit (
+                    {formatDistance(direction.cumulativeDistance)} m)
                   </p>
                 </div>
               </div>
@@ -392,13 +398,13 @@ function showRouteResultMobile(
                   <div className="flex flex-col  py-2 gap-2  justify-start">
                     <p className="text-xs font-semibold  ">
                       <span className="text-lg font-bold">
-                        {Math.round(route.travel_time)} Menit
+                        {formatTime(route.travel_time)} Menit
                       </span>
                       <span>&nbsp;&nbsp;&nbsp;</span>
                       Tiba pada {nowTime ? getArrivalTime(route.travel_time, nowTime) : "--:--"}{" "}
                     </p>
                     <p className="text-sm text-[#4C4C4C] ">
-                      {route.distance} KM
+                      {formatDistance(route.distance)} KM
                     </p>
                   </div>
 
@@ -421,8 +427,8 @@ function showRouteResultMobile(
           </div>
         )
       ) : (
-        <div className="flex flex-row mt-6 items-center ">
-          <div className="mr-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-white/10 p-2 rounded-xl">
             <Image
               src={getTurnIcon(
                 props.routeDataCRP![activeRoute].driving_directions[
@@ -430,17 +436,17 @@ function showRouteResultMobile(
                 ].turn_type,
                 "icons_white",
               )}
-              width={60}
-              height={60}
+              width={42}
+              height={42}
               alt={`turn-start-route`}
               key={`turn-start-route`}
             />
           </div>
-          <div className="flex flex-col gap-2   items-start justify-center">
-            <p className="text-2xl font-bold text-white ">
-              {props.distanceFromNextTurnPoint.toPrecision(4)} m
+          <div className="flex flex-col">
+            <p className="text-xl font-black text-white leading-tight">
+              {formatDistance(props.distanceFromNextTurnPoint)} <span className="text-sm font-normal opacity-70">m</span>
             </p>
-            <p className="text-2xl font-bold text-[#1DA1F2]  ">
+            <p className="text-sm font-bold text-blue-400 line-clamp-1">
               {
                 props.routeDataCRP![activeRoute].driving_directions[
                   props.currentDirectionIndex
@@ -482,11 +488,11 @@ function showRouteEtaAndDistance(
         </p>
         <div className="flex flex-row space-x-2 items-center">
           <p className="text-base ">
-            {Math.round(props.routeDataCRP![activeRoute].travel_time)} menit
+            {formatTime(props.routeDataCRP![activeRoute].travel_time)} menit
           </p>
           <FaCircle size={14} color="#dedfe0" />
           <p className="text-base ">
-            {props.routeDataCRP![activeRoute].distance.toPrecision(1)} km
+            {formatDistance(props.routeDataCRP![activeRoute].distance)} km
           </p>
         </div>
       </div>
@@ -612,12 +618,12 @@ function showRouteResult(
                 <div className="flex flex-col  py-2 gap-2  justify-start">
                   <p className="text-xs font-semibold  ">
                     <span className="text-lg font-bold">
-                      {Math.round(route.travel_time)} Menit
+                      {formatTime(route.travel_time)} Menit
                     </span>
                     <span>&nbsp;&nbsp;&nbsp;</span>
                     Tiba pada {nowTime ? getArrivalTime(route.travel_time, nowTime) : "--:--"}{" "}
                   </p>
-                  <p className="text-sm text-[#4C4C4C] ">{route.distance} KM</p>
+                  <p className="text-sm text-[#4C4C4C] ">{formatDistance(route.distance)} KM</p>
                 </div>
 
                 <button
@@ -744,8 +750,8 @@ function showRouteDirectionsComponent(
               </p>
             </div>
             <p className="text-sm font-light">
-              {formatMinutes(direction.cumulativeEta)} menit (
-              {Math.round(direction.cumulativeDistance)} m)
+              {formatTime(direction.cumulativeEta)} menit (
+              {formatDistance(direction.cumulativeDistance)} m)
             </p>
           </div>
         </div>
