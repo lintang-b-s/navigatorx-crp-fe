@@ -168,9 +168,7 @@ export default function Home() {
       }
 
       const allowedOrientationPerm = await requestAccess();
-      if (allowedOrientationPerm) {
-        toast.success("Orientation permission granted");
-      } else {
+      if (!allowedOrientationPerm) {
         toast.error("Orientation permission not granted");
       }
 
@@ -471,6 +469,7 @@ export default function Home() {
 
           if (!currentGpsLocRef.current) {
             currentGpsLocRef.current = { lat: matched.lat, lon: matched.lon };
+            currentHeadingRef.current = targetHeading;
             setNavigationState(prev => ({
               ...prev,
               matchedGpsLoc: { ...currentGpsLocRef.current! },
@@ -777,6 +776,9 @@ export default function Home() {
             const altResponse = await fetchAlternativeRoutes(reqBody);
             const newAlternatives = altResponse.data.alternative_routes || [];
             if (newAlternatives.length > 0) {
+              newAlternatives.forEach((alt: any) => {
+                alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
+              });
               const mainRoute = routeData[0];
               const combinedRoutes = [mainRoute, ...newAlternatives];
               setRouteData(combinedRoutes);
@@ -858,7 +860,13 @@ export default function Home() {
               fetchAlternativeRoutes(reqBody),
             ]);
 
+            newSpRouteData.data.distance = parseFloat(
+              (newSpRouteData.data.distance / 1000).toFixed(2)
+            );
             const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
+            newAlternatives.forEach((alt: any) => {
+              alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
+            });
             const combinedRoutes = [newSpRouteData.data, ...newAlternatives];
             
             setRouteData(combinedRoutes);
