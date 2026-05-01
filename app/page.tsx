@@ -839,12 +839,12 @@ export default function Home() {
           }
         }
         if (isOffTheRoute && snappedEdgeID !== -1) {
-          if (mapMatchStep.current <= 5 && isInitialReroutePerformed.current) {
+          if (mapMatchStep.current <= 1 && isInitialReroutePerformed.current) {
             return;
           }
           isReroutingRef.current = true;
           try {
-            if (mapMatchStep.current <= 5) {
+            if (mapMatchStep.current <= 1) {
               isInitialReroutePerformed.current = true;
             }
             const reqBody = {
