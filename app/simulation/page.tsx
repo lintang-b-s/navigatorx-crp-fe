@@ -163,7 +163,7 @@ export default function SimulationPage() {
         newSpRouteData.data.distance = parseFloat(
           (newSpRouteData.data.distance / 1000).toFixed(2)
         );
-        const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
+        const newAlternatives = alternativeRouteData.data.alternative_routes;
         newAlternatives.forEach((alt: any) => {
           alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
         });
@@ -186,7 +186,7 @@ export default function SimulationPage() {
         };
         setPolylineData(linedata);
 
-        const alternativesPolyline = (alternativeRouteData.data.alternative_routes || []).map((route) => {
+        const alternativesPolyline = alternativeRouteData.data.alternative_routes.map((route) => {
           const coords = polyline.decode(route.path);
           return {
             type: "Feature",
@@ -494,7 +494,7 @@ export default function SimulationPage() {
                         startEdgeId: currentEdgeID,
                       });
 
-                      const newAlternatives = altResponse.data.alternative_routes || [];
+                      const newAlternatives = altResponse.data.alternative_routes;
                       if (newAlternatives.length > 0) {
                         const mainRoute = routeDataRef.current[0];
                         const combinedRoutes = [mainRoute, ...newAlternatives];
@@ -569,7 +569,7 @@ export default function SimulationPage() {
                     newSpRouteData.data.distance = parseFloat(
                       (newSpRouteData.data.distance / 1000).toFixed(2)
                     );
-                    const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
+                    const newAlternatives = alternativeRouteData.data.alternative_routes;
                     newAlternatives.forEach((alt: any) => {
                       alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
                     });
@@ -591,7 +591,7 @@ export default function SimulationPage() {
                     };
                     setPolylineData(newLinedata);
 
-                    const alternativesPolyline = (alternativeRouteData.data.alternative_routes || []).map((route) => {
+                    const alternativesPolyline = alternativeRouteData.data.alternative_routes.map((route) => {
                       const coords = polyline.decode(route.path);
                       return {
                         type: "Feature",

@@ -298,7 +298,6 @@ export default function Home() {
 
       if (
         alternativeRouteData &&
-        alternativeRouteData.data.alternative_routes != null &&
         alternativeRouteData.data.alternative_routes.length > 0
       ) {
         alternativeRouteData.data.alternative_routes.map((alt) => {
@@ -774,7 +773,7 @@ export default function Home() {
               startEdgeId: snappedEdgeID,
             };
             const altResponse = await fetchAlternativeRoutes(reqBody);
-            const newAlternatives = altResponse.data.alternative_routes || [];
+            const newAlternatives = altResponse.data.alternative_routes;
             if (newAlternatives.length > 0) {
               newAlternatives.forEach((alt: any) => {
                 alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
@@ -839,12 +838,12 @@ export default function Home() {
           }
         }
         if (isOffTheRoute && snappedEdgeID !== -1) {
-          if (mapMatchStep.current <= 5 && isInitialReroutePerformed.current) {
+          if (mapMatchStep.current <= 1 && isInitialReroutePerformed.current) {
             return;
           }
           isReroutingRef.current = true;
           try {
-            if (mapMatchStep.current <= 5) {
+            if (mapMatchStep.current <= 1) {
               isInitialReroutePerformed.current = true;
             }
             const reqBody = {
@@ -863,7 +862,7 @@ export default function Home() {
             newSpRouteData.data.distance = parseFloat(
               (newSpRouteData.data.distance / 1000).toFixed(2)
             );
-            const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
+            const newAlternatives = alternativeRouteData.data.alternative_routes;
             newAlternatives.forEach((alt: any) => {
               alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
             });
