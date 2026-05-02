@@ -822,9 +822,9 @@ export default function Home() {
       }
     }
 
-    const firstRouteEdgeID = usedRoute?.driving_directions[0]?.edge_ids[0];
-    if (snappedEdgeID == firstRouteEdgeID || mapMatchStep.current == 1) {
-      // skip re-route logic if current user location == source loc.
+    const firstDirectionEdgeIDs = usedRoute?.driving_directions[0]?.edge_ids || [];
+    if (firstDirectionEdgeIDs.includes(snappedEdgeID) || mapMatchStep.current < 5) {
+      // skip re-route logic during the initial "settling" phase or if still in first direction
       return;
     }
 
@@ -849,12 +849,12 @@ export default function Home() {
           }
         }
         if (isOffTheRoute && snappedEdgeID !== -1) {
-          if (mapMatchStep.current <= 1 && isInitialReroutePerformed.current) {
+          if (mapMatchStep.current < 5 && isInitialReroutePerformed.current) {
             return;
           }
           isReroutingRef.current = true;
           try {
-            if (mapMatchStep.current <= 1) {
+            if (mapMatchStep.current < 5) {
               isInitialReroutePerformed.current = true;
             }
             const reqBody = {
