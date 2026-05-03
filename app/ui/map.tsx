@@ -21,6 +21,11 @@ import Image from "next/image";
 import { IoLocationSharp } from "react-icons/io5";
 import { FaLocationArrow } from "react-icons/fa";
 import polyline from "@mapbox/polyline";
+import {
+  fetchAlternativeRoutes,
+  fetchRouteCRP,
+  fetchBoundingBox,
+} from "../lib/navigatorxApi";
 import { haversineDistance } from "../lib/util";
 
 const ACTIVE_ROUTE_COLOR = "#470DF9";
@@ -82,42 +87,38 @@ export const MapComponent = React.memo(function MapComponent({
   });
 
   useEffect(() => {
-    const fetchBoundingBox = async () => {
+    const getBoundingBox = async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/boundingBox`,
-        );
-        const json = await res.json();
-        if (json && json.data) {
-          const { min_lat, min_lon, max_lat, max_lon } = json.data;
-          setBoundingBoxGeoJSON({
-            type: "Feature",
-            geometry: {
-              type: "LineString",
-              coordinates: [
-                [min_lon, min_lat],
-                [max_lon, min_lat],
-                [max_lon, max_lat],
-                [min_lon, max_lat],
-                [min_lon, min_lat],
-              ],
-            },
-            properties: {},
-          });
+        const response = await fetchBoundingBox();
+        const { min_lat, min_lon, max_lat, max_lon } = response.data;
 
-          const centerLon = (min_lon + max_lon) / 2;
-          const centerLat = (min_lat + max_lat) / 2;
-          setViewState((prev) => ({
-            ...prev,
-            longitude: centerLon,
-            latitude: centerLat,
-          }));
-        }
-      } catch (err) {
-        console.error("Failed to fetch bounding box", err);
+        setBoundingBoxGeoJSON({
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [min_lon, min_lat],
+              [max_lon, min_lat],
+              [max_lon, max_lat],
+              [min_lon, max_lat],
+              [min_lon, min_lat],
+            ],
+          },
+        });
+
+        const centerLon = (min_lon + max_lon) / 2;
+        const centerLat = (min_lat + max_lat) / 2;
+        setViewState((prev) => ({
+          ...prev,
+          longitude: centerLon,
+          latitude: centerLat,
+        }));
+      } catch (error) {
+        console.error("Failed to fetch bounding box:", error);
       }
     };
-    fetchBoundingBox();
+    getBoundingBox();
   }, []);
 
   const [touchStartTime, setTouchStartTime] = useState<number | null>(null);

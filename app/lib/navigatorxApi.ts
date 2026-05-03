@@ -58,6 +58,17 @@ export interface AlternativeRoutesResponse {
 
 
 
+export interface BoundingBoxResponse {
+  min_lat: number;
+  min_lon: number;
+  max_lat: number;
+  max_lon: number;
+}
+
+export interface BoundingBoxWrapper {
+  data: BoundingBoxResponse;
+}
+
 // for https://github.com/lintang-b-s/Navigatorx
 export const fetchRouteCRP = async ({
   srcLat,
@@ -100,6 +111,16 @@ export const fetchRouteCRP = async ({
     } else {
       throw new Error("navigatorx routing engine sedang ada perbaikan");
     }
+  }
+};
+
+export const fetchBoundingBox = async (): Promise<BoundingBoxWrapper> => {
+  try {
+    const url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/boundingBox`;
+    const { data } = await axios.get(url);
+    return data;
+  } catch (error) {
+    throw new Error("Failed to fetch bounding box");
   }
 };
 
