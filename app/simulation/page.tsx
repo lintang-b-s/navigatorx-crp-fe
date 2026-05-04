@@ -81,12 +81,22 @@ export default function SimulationPage() {
   
   // States for simplified UI
   const [isUsingWebSocket, setIsUsingWebSocket] = useState(false);
+  const [isUsingWasm, setIsUsingWasm] = useState(false);
   const [isShowingGpsWindow, setIsShowingGpsWindow] = useState(false);
   const isShowingGpsWindowRef = useRef(false);
   const isUsingWebSocketRef = useRef(false);
+  const isUsingWasmRef = useRef(false);
+  const isWasmReadyRef = useRef(false);
   const routeDataRef = useRef<RouteCRPResponse[]>([]);
   const activeRouteRef = useRef(0);
   const snappedEdgeIDRef = useRef(-1);
+
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "/wasm_exec.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
 
   useEffect(() => { routeDataRef.current = routeData; }, [routeData]);
   useEffect(() => { activeRouteRef.current = activeRoute; }, [activeRoute]);
@@ -109,6 +119,7 @@ export default function SimulationPage() {
     showGpsWindow: boolean, 
     drivingDirection: boolean,
     writeToLog: boolean,
+    useWasm: boolean,
     fileName: string,
     trackName: string
   ) => {
@@ -122,9 +133,31 @@ export default function SimulationPage() {
     setGpsWindowPoints([]);
     setIsDrivingDirectionEnabled(drivingDirection);
     setIsUsingWebSocket(useWebSocket);
+    setIsUsingWasm(useWasm);
     setIsShowingGpsWindow(showGpsWindow);
     isShowingGpsWindowRef.current = showGpsWindow;
     isUsingWebSocketRef.current = useWebSocket;
+    isUsingWasmRef.current = useWasm;
+
+    if (useWasm && !isWasmReadyRef.current) {
+      const toastId = toast.loading("Initializing WASM Engine (loading data)...");
+      try {
+        const go = new (window as any).Go();
+        const result = await WebAssembly.instantiateStreaming(
+          fetch("/mapmatcher.wasm"),
+          go.importObject
+        );
+        go.run(result.instance);
+        isWasmReadyRef.current = true;
+        toast.success("WASM Engine Ready", { id: toastId });
+      } catch (err: any) {
+        console.error("WASM Init Error:", err);
+        toast.error("Failed to init WASM: " + err.message + ". Falling back to other modes.", { id: toastId });
+        setIsUsingWasm(false);
+        isUsingWasmRef.current = false;
+      }
+    }
+
     setRouteData([]);
     routeDataRef.current = [];
     setPolylineData(undefined);
@@ -145,75 +178,75 @@ export default function SimulationPage() {
     });
     setRawGpsLoc(undefined);
 
-    if (drivingDirection) {
-      try {
-        const firstPoint = points[0];
-        const lastPoint = points[points.length - 1];
-        const reqBody = {
-          srcLat: firstPoint.Latitude,
-          srcLon: firstPoint.Longitude,
-          destLat: lastPoint.Latitude,
-          destLon: lastPoint.Longitude,
-        };
-        const [newSpRouteData, alternativeRouteData] = await Promise.all([
-          fetchRouteCRP(reqBody),
-          fetchAlternativeRoutes(reqBody),
-        ]);
+    // Always fetch initial route for simulation context
+    try {
+      const firstPoint = points[0];
+      const lastPoint = points[points.length - 1];
+      const reqBody = {
+        srcLat: firstPoint.Latitude,
+        srcLon: firstPoint.Longitude,
+        destLat: lastPoint.Latitude,
+        destLon: lastPoint.Longitude,
+      };
+      const [newSpRouteData, alternativeRouteData] = await Promise.all([
+        fetchRouteCRP(reqBody),
+        fetchAlternativeRoutes(reqBody),
+      ]);
 
-        newSpRouteData.data.distance = parseFloat(
-          (newSpRouteData.data.distance / 1000).toFixed(2)
-        );
-        const newAlternatives = alternativeRouteData.data.alternative_routes;
-        newAlternatives.forEach((alt: any) => {
-          alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
-        });
+      newSpRouteData.data.distance = parseFloat(
+        (newSpRouteData.data.distance / 1000).toFixed(2)
+      );
+      const newAlternatives = alternativeRouteData.data.alternative_routes;
+      newAlternatives.forEach((alt: any) => {
+        alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
+      });
 
-        const combinedRoutes = [
-          newSpRouteData.data,
-          ...newAlternatives,
-        ];
+      const combinedRoutes = [
+        newSpRouteData.data,
+        ...newAlternatives,
+      ];
 
-        setRouteData(combinedRoutes);
-        routeDataRef.current = combinedRoutes;
-        
-        const coords = polyline.decode(newSpRouteData.data.path);
-        const linedata: LineData = {
+      setRouteData(combinedRoutes);
+      routeDataRef.current = combinedRoutes;
+      
+      const coords = polyline.decode(newSpRouteData.data.path);
+      const linedata: LineData = {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: coords.map((coord) => [coord[1], coord[0]]),
+        },
+      };
+      setPolylineData(linedata);
+
+      const alternativesPolyline = alternativeRouteData.data.alternative_routes.map((route) => {
+        const coords = polyline.decode(route.path);
+        return {
           type: "Feature",
           geometry: {
             type: "LineString",
             coordinates: coords.map((coord) => [coord[1], coord[0]]),
           },
-        };
-        setPolylineData(linedata);
+        } as LineData;
+      });
+      
+      const dummyRoute: LineData = {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [-100, 40],
+            [-100, 40],
+          ],
+        },
+      };
+      setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
 
-        const alternativesPolyline = alternativeRouteData.data.alternative_routes.map((route) => {
-          const coords = polyline.decode(route.path);
-          return {
-            type: "Feature",
-            geometry: {
-              type: "LineString",
-              coordinates: coords.map((coord) => [coord[1], coord[0]]),
-            },
-          } as LineData;
-        });
-        
-        // In simulation, alternativeRoutesLineData includes a dummy at index 0 
-        // to align with routeData (where index 0 is the main route)
-        const dummyRoute: LineData = {
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: [
-              [-100, 40],
-              [-100, 40],
-            ],
-          },
-        };
-        setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
-
-        setActiveRoute(0);
-        activeRouteRef.current = 0;
-      } catch (error: any) {
+      setActiveRoute(0);
+      activeRouteRef.current = 0;
+    } catch (error: any) {
+      console.error("Failed to fetch initial route:", error);
+      if (drivingDirection) {
         toast.error("Failed to fetch initial route: " + error.message);
       }
     }
@@ -334,8 +367,17 @@ export default function SimulationPage() {
       try {
         let apiResponse;
 
-        
-        if (isUsingWebSocketRef.current && ws && ws.readyState === WebSocket.OPEN) {
+        if (isUsingWasmRef.current && (window as any).OnlineMapMatch) {
+          const res = (window as any).OnlineMapMatch(
+            mapMatchRequest.gps_point,
+            mapMatchRequest.k,
+            mapMatchRequest.candidates,
+            mapMatchRequest.speed_mean_k,
+            mapMatchRequest.speed_std_k,
+            mapMatchRequest.last_bearing
+          );
+          apiResponse = { data: res };
+        } else if (isUsingWebSocketRef.current && ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify(mapMatchRequest));
           apiResponse = await new Promise((resolve) => {
             ws!.onmessage = (event) => {

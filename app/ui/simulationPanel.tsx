@@ -13,6 +13,7 @@ interface SimulationPanelProps {
     showGpsWindow: boolean, 
     drivingDirection: boolean,
     writeToLog: boolean,
+    useWasm: boolean,
     fileName: string,
     trackName: string
   ) => void;
@@ -31,8 +32,9 @@ export const SimulationPanel = React.memo(function SimulationPanel({
   const [selectedTrack, setSelectedTrack] = useState<string>("");
   const [isScanning, setIsScanning] = useState(false);
   const [showGpsWindow, setShowGpsWindow] = useState(false);
-  const [drivingDirection, setDrivingDirection] = useState(false);
+  const [drivingDirection, setDrivingDirection] = useState(true);
   const [writeToLog, setWriteToLog] = useState(false);
+  const [useWasm, setUseWasm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,6 +128,7 @@ export const SimulationPanel = React.memo(function SimulationPanel({
         showGpsWindow, 
         drivingDirection,
         writeToLog,
+        useWasm,
         file.name,
         selectedTrack
       );
@@ -255,6 +258,27 @@ export const SimulationPanel = React.memo(function SimulationPanel({
               disabled={isRunning}
             />
             <p className="ml-2 text-sm text-[#666f74]">Write Map Match Result to File</p>
+          </label>
+
+          <label className="flex flex-row items-center cursor-pointer select-none">
+            <div
+              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 
+                ${
+                  useWasm
+                    ? "border-blue-500 bg-blue-500"
+                    : "border-gray-400 bg-white"
+                }`}
+            >
+              {useWasm && <FaCheck size={13} color="white" />}
+            </div>
+            <input 
+              type="checkbox" 
+              checked={useWasm}
+              onChange={(e) => setUseWasm(e.target.checked)}
+              className="hidden"
+              disabled={isRunning}
+            />
+            <p className="ml-2 text-sm text-[#666f74]">Use WASM (Client Side)</p>
           </label>
         </div>
 
