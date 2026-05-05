@@ -21,6 +21,11 @@ import Image from "next/image";
 import { IoLocationSharp } from "react-icons/io5";
 import { FaLocationArrow } from "react-icons/fa";
 import polyline from "@mapbox/polyline";
+import {
+  fetchAlternativeRoutes,
+  fetchRouteCRP,
+  fetchBoundingBox,
+} from "../lib/navigatorxApi";
 import { haversineDistance } from "../lib/util";
 
 const ACTIVE_ROUTE_COLOR = "#470DF9";
@@ -82,42 +87,38 @@ export const MapComponent = React.memo(function MapComponent({
   });
 
   useEffect(() => {
-    const fetchBoundingBox = async () => {
+    const getBoundingBox = async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/boundingBox`,
-        );
-        const json = await res.json();
-        if (json && json.data) {
-          const { min_lat, min_lon, max_lat, max_lon } = json.data;
-          setBoundingBoxGeoJSON({
-            type: "Feature",
-            geometry: {
-              type: "LineString",
-              coordinates: [
-                [min_lon, min_lat],
-                [max_lon, min_lat],
-                [max_lon, max_lat],
-                [min_lon, max_lat],
-                [min_lon, min_lat],
-              ],
-            },
-            properties: {},
-          });
+        const response = await fetchBoundingBox();
+        const { min_lat, min_lon, max_lat, max_lon } = response.data;
 
-          const centerLon = (min_lon + max_lon) / 2;
-          const centerLat = (min_lat + max_lat) / 2;
-          setViewState((prev) => ({
-            ...prev,
-            longitude: centerLon,
-            latitude: centerLat,
-          }));
-        }
-      } catch (err) {
-        console.error("Failed to fetch bounding box", err);
+        setBoundingBoxGeoJSON({
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [min_lon, min_lat],
+              [max_lon, min_lat],
+              [max_lon, max_lat],
+              [min_lon, max_lat],
+              [min_lon, min_lat],
+            ],
+          },
+        });
+
+        const centerLon = (min_lon + max_lon) / 2;
+        const centerLat = (min_lat + max_lat) / 2;
+        setViewState((prev) => ({
+          ...prev,
+          longitude: centerLon,
+          latitude: centerLat,
+        }));
+      } catch (error) {
+        console.error("Failed to fetch bounding box:", error);
       }
     };
-    fetchBoundingBox();
+    getBoundingBox();
   }, []);
 
   const [touchStartTime, setTouchStartTime] = useState<number | null>(null);
@@ -307,47 +308,38 @@ export const MapComponent = React.memo(function MapComponent({
         </Source>
       )}
 
-      {!routeStarted ? (
-        <>
-          <GeolocateControl
-            position="bottom-right"
-            positionOptions={{ enableHighAccuracy: true }}
-            onGeolocate={(e) => {
-              onUserLocationUpdateHandler(
-                e.coords.latitude,
-                e.coords.longitude,
-              );
-              setViewState((prev) => ({
-                ...prev,
-                latitude: e.coords.latitude,
-                longitude: e.coords.longitude,
-                zoom: 17,
-              }));
-            }}
-            showAccuracyCircle={!routeStarted}
-            showUserLocation={!routeStarted}
-          />
-          <NavigationControl position="bottom-right" />
-        </>
-      ) : (
-        <>
-          <GeolocateControl
-            style={{ position: "absolute", bottom: "100px", right: "5px" }}
-            positionOptions={{ enableHighAccuracy: true }}
-            onGeolocate={(e) => {
-              onUserLocationUpdateHandler(
-                e.coords.latitude,
-                e.coords.longitude,
-              );
-            }}
-            showAccuracyCircle={false}
-            showUserLocation={false}
-          />
-          <NavigationControl
-            style={{ position: "absolute", bottom: "140px", right: "5px" }}
-          />
-        </>
-      )}
+      <GeolocateControl
+        position="bottom-right"
+        style={routeStarted ? { marginBottom: "50px" } : {}}
+        positionOptions={{ enableHighAccuracy: true }}
+        onGeolocate={(e) => {
+          onUserLocationUpdateHandler(e.coords.latitude, e.coords.longitude);
+          if (!routeStarted) {
+            setViewState((prev) => ({
+              ...prev,
+              latitude: e.coords.latitude,
+              longitude: e.coords.longitude,
+              zoom: 17,
+            }));
+          } else if (currentGpsLocRef?.current && mapRef.current) {
+            mapRef.current.jumpTo({
+              center: [
+                currentGpsLocRef.current.lon,
+                currentGpsLocRef.current.lat,
+              ],
+              zoom: 17,
+              bearing: currentHeadingRef?.current || 0,
+            });
+            mapRef.current.fire("resume-tracking");
+          }
+        }}
+        showAccuracyCircle={true}
+        showUserLocation={true}
+      />
+      <NavigationControl
+        position="bottom-right"
+        style={routeStarted ? { marginBottom: "30px" } : {}}
+      />
 
       {/* show shortest path route on below of active route  if sp path not activeRoute*/}
       {!isDirectionActive && activeRoute != 0 && spRouteGeoJSON && (
@@ -744,12 +736,18 @@ const ImperativeNavigationMarker = ({
       }, 3000); // Resume tracking after 3 seconds of inactivity
     };
 
+    const onResumeTracking = () => {
+      isUserInteracting = false;
+      clearTimeout(interactionTimeout);
+    };
+
     mapInstance.on('dragstart', onUserInteractionStart);
     mapInstance.on('zoomstart', onUserInteractionStart);
     mapInstance.on('pitchstart', onUserInteractionStart);
     mapInstance.on('dragend', onUserInteractionEnd);
     mapInstance.on('zoomend', onUserInteractionEnd);
     mapInstance.on('pitchend', onUserInteractionEnd);
+    mapInstance.on('resume-tracking', onResumeTracking);
 
     const update = () => {
       if (currentGpsLocRef.current && markerRef.current) {
@@ -789,6 +787,7 @@ const ImperativeNavigationMarker = ({
       mapInstance.off('dragend', onUserInteractionEnd);
       mapInstance.off('zoomend', onUserInteractionEnd);
       mapInstance.off('pitchend', onUserInteractionEnd);
+      mapInstance.off('resume-tracking', onResumeTracking);
       if (markerRef.current) {
         markerRef.current.remove();
         markerRef.current = null;

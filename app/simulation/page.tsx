@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import toast from "react-hot-toast";
+import axios from "axios";
 import { SimulationPanel } from "@/app/ui/simulationPanel";
 import { Coord, MapMatchRequest, Candidate } from "@/app/lib/mapmatchApi";
 import { haversineDistance, project, gt } from "@/app/lib/util";
@@ -27,7 +28,7 @@ import {
   MIN_SPEED_THRESHOLD,
   UPDATE_NAVIGATION_STATE_THRESHOLD_MS
 } from "@/app/lib/constants";
-
+import { wasmMapMatcher } from "@/app/lib/wasmMapmatch";
 
 const MapComponent = dynamic(
   () => import("@/app/ui/map").then((mod) => mod.MapComponent),
@@ -65,6 +66,11 @@ export default function SimulationPage() {
   const currentGpsLocRef = useRef<Coord | null>(null);
   const currentHeadingRef = useRef<number>(0);
   const logResultsRef = useRef<{ edge_id: number; lat: number; lon: number }[]>([]);
+  const [isUsingWebSocket, setIsUsingWebSocket] = useState(false);
+  const isUsingWebSocketRef = useRef(false);
+  const [isUsingWasm, setIsUsingWasm] = useState(false);
+  const isUsingWasmRef = useRef(false);
+  const socketRef = useRef<WebSocket | null>(null);
   
   // Dummy data required by MapComponent props
   const [userLoc, setUserLoc] = useState({ longitude: -100, latitude: 40 });
@@ -80,13 +86,13 @@ export default function SimulationPage() {
   const [isDrivingDirectionEnabled, setIsDrivingDirectionEnabled] = useState(false);
   
   // States for simplified UI
-  const [isUsingWebSocket, setIsUsingWebSocket] = useState(false);
   const [isShowingGpsWindow, setIsShowingGpsWindow] = useState(false);
   const isShowingGpsWindowRef = useRef(false);
-  const isUsingWebSocketRef = useRef(false);
   const routeDataRef = useRef<RouteCRPResponse[]>([]);
   const activeRouteRef = useRef(0);
   const snappedEdgeIDRef = useRef(-1);
+
+
 
   useEffect(() => { routeDataRef.current = routeData; }, [routeData]);
   useEffect(() => { activeRouteRef.current = activeRoute; }, [activeRoute]);
@@ -101,17 +107,22 @@ export default function SimulationPage() {
     stopSimulationRef.current = true;
     setGpsWindowPoints([]);
     setRawGpsLoc(undefined);
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
   }, []);
-
-  const onSimulationStart = useCallback(async (
-    points: any[], 
-    useWebSocket: boolean, 
-    showGpsWindow: boolean, 
-    drivingDirection: boolean,
-    writeToLog: boolean,
-    fileName: string,
-    trackName: string
-  ) => {
+  const onSimulationStart = useCallback(
+    async (
+      points: any[],
+      useWebSocket: boolean,
+      showGpsWindow: boolean,
+      drivingDirection: boolean,
+      writeToLog: boolean,
+      useWasm: boolean,
+      fileName: string,
+      trackName: string
+    ) => {
     if (points.length === 0 || isRunning) return;
     
     const simulationId = Date.now().toString();
@@ -120,11 +131,32 @@ export default function SimulationPage() {
     setIsRunning(true);
     stopSimulationRef.current = false;
     setGpsWindowPoints([]);
-    setIsDrivingDirectionEnabled(drivingDirection);
-    setIsUsingWebSocket(useWebSocket);
     setIsShowingGpsWindow(showGpsWindow);
     isShowingGpsWindowRef.current = showGpsWindow;
+    setIsDrivingDirectionEnabled(drivingDirection);
+    setIsUsingWebSocket(useWebSocket);
     isUsingWebSocketRef.current = useWebSocket;
+    setIsUsingWasm(useWasm);
+    isUsingWasmRef.current = useWasm;
+
+    if (useWasm) {
+      await wasmMapMatcher.init();
+    }
+
+    if (useWebSocket) {
+      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL || "ws://localhost:6060/ws/onlineMapMatch";
+      socketRef.current = new WebSocket(wsUrl);
+      socketRef.current.onopen = () => console.log("WebSocket connected");
+      socketRef.current.onclose = () => console.log("WebSocket disconnected");
+      socketRef.current.onerror = (err) => console.error("WebSocket error:", err);
+      // wait for connection
+      let timeout = 0;
+      while (socketRef.current.readyState !== WebSocket.OPEN && timeout < 20) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        timeout++;
+      }
+    }
+
     setRouteData([]);
     routeDataRef.current = [];
     setPolylineData(undefined);
@@ -145,75 +177,75 @@ export default function SimulationPage() {
     });
     setRawGpsLoc(undefined);
 
-    if (drivingDirection) {
-      try {
-        const firstPoint = points[0];
-        const lastPoint = points[points.length - 1];
-        const reqBody = {
-          srcLat: firstPoint.Latitude,
-          srcLon: firstPoint.Longitude,
-          destLat: lastPoint.Latitude,
-          destLon: lastPoint.Longitude,
-        };
-        const [newSpRouteData, alternativeRouteData] = await Promise.all([
-          fetchRouteCRP(reqBody),
-          fetchAlternativeRoutes(reqBody),
-        ]);
+    // Always fetch initial route for simulation context
+    try {
+      const firstPoint = points[0];
+      const lastPoint = points[points.length - 1];
+      const reqBody = {
+        srcLat: firstPoint.Latitude,
+        srcLon: firstPoint.Longitude,
+        destLat: lastPoint.Latitude,
+        destLon: lastPoint.Longitude,
+      };
+      const [newSpRouteData, alternativeRouteData] = await Promise.all([
+        fetchRouteCRP(reqBody),
+        fetchAlternativeRoutes(reqBody),
+      ]);
 
-        newSpRouteData.data.distance = parseFloat(
-          (newSpRouteData.data.distance / 1000).toFixed(2)
-        );
-        const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
-        newAlternatives.forEach((alt: any) => {
-          alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
-        });
+      newSpRouteData.data.distance = parseFloat(
+        (newSpRouteData.data.distance / 1000).toFixed(2)
+      );
+      const newAlternatives = alternativeRouteData.data.alternative_routes;
+      newAlternatives.forEach((alt: any) => {
+        alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
+      });
 
-        const combinedRoutes = [
-          newSpRouteData.data,
-          ...newAlternatives,
-        ];
+      const combinedRoutes = [
+        newSpRouteData.data,
+        ...newAlternatives,
+      ];
 
-        setRouteData(combinedRoutes);
-        routeDataRef.current = combinedRoutes;
-        
-        const coords = polyline.decode(newSpRouteData.data.path);
-        const linedata: LineData = {
+      setRouteData(combinedRoutes);
+      routeDataRef.current = combinedRoutes;
+      
+      const coords = polyline.decode(newSpRouteData.data.path);
+      const linedata: LineData = {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: coords.map((coord) => [coord[1], coord[0]]),
+        },
+      };
+      setPolylineData(linedata);
+
+      const alternativesPolyline = alternativeRouteData.data.alternative_routes.map((route) => {
+        const coords = polyline.decode(route.path);
+        return {
           type: "Feature",
           geometry: {
             type: "LineString",
             coordinates: coords.map((coord) => [coord[1], coord[0]]),
           },
-        };
-        setPolylineData(linedata);
+        } as LineData;
+      });
+      
+      const dummyRoute: LineData = {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [-100, 40],
+            [-100, 40],
+          ],
+        },
+      };
+      setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
 
-        const alternativesPolyline = (alternativeRouteData.data.alternative_routes || []).map((route) => {
-          const coords = polyline.decode(route.path);
-          return {
-            type: "Feature",
-            geometry: {
-              type: "LineString",
-              coordinates: coords.map((coord) => [coord[1], coord[0]]),
-            },
-          } as LineData;
-        });
-        
-        // In simulation, alternativeRoutesLineData includes a dummy at index 0 
-        // to align with routeData (where index 0 is the main route)
-        const dummyRoute: LineData = {
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: [
-              [-100, 40],
-              [-100, 40],
-            ],
-          },
-        };
-        setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
-
-        setActiveRoute(0);
-        activeRouteRef.current = 0;
-      } catch (error: any) {
+      setActiveRoute(0);
+      activeRouteRef.current = 0;
+    } catch (error: any) {
+      console.error("Failed to fetch initial route:", error);
+      if (drivingDirection) {
         toast.error("Failed to fetch initial route: " + error.message);
       }
     }
@@ -226,22 +258,6 @@ export default function SimulationPage() {
     let prevTime: Date | null = null;
     let lastBearing = 0.0;
 
-    let ws: WebSocket | null = null;
-    if (useWebSocket) {
-      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL as string;
-      ws = new WebSocket(wsUrl);
-      ws.onerror = (e) => {
-        console.error("WebSocket Error", e);
-        toast.error("WebSocket connection failed.");
-        onSimulationStop();
-      }
-      
-      await new Promise((resolve) => {
-        if (ws) {
-          ws.onopen = () => resolve(true);
-        }
-      });
-    }
 
     const httpUrl = process.env.NEXT_PUBLIC_MAP_MATCH_HTTP_URL || "http://localhost:6060/api/onlineMapMatch";
 
@@ -334,21 +350,28 @@ export default function SimulationPage() {
       try {
         let apiResponse;
 
-        
-        if (isUsingWebSocketRef.current && ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(mapMatchRequest));
-          apiResponse = await new Promise((resolve) => {
-            ws!.onmessage = (event) => {
-              resolve(JSON.parse(event.data));
-            };
-          });
-        } else {
-          const response = await fetch(httpUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(mapMatchRequest),
-          });
-          apiResponse = await response.json();
+        // Choice of matching mode
+        if (mapMatchRequest) {
+          if (isUsingWasmRef.current) {
+            await wasmMapMatcher.loadTile(point.Latitude, point.Longitude);
+            const res = wasmMapMatcher.onlineMapMatch(
+              mapMatchRequest.gps_point,
+              mapMatchRequest.k,
+              mapMatchRequest.candidates,
+              mapMatchRequest.speed_mean_k,
+              mapMatchRequest.speed_std_k,
+              mapMatchRequest.last_bearing
+            );
+            apiResponse = { data: res };
+          } else if (isUsingWebSocketRef.current && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            socketRef.current.send(JSON.stringify(mapMatchRequest));
+            const msg = await new Promise<any>((resolve) => {
+              socketRef.current!.onmessage = (event) => resolve(JSON.parse(event.data));
+            });
+            apiResponse = { data: msg.data };
+          } else {
+            apiResponse = await axios.post(httpUrl, mapMatchRequest);
+          }
         }
         
 
@@ -494,7 +517,7 @@ export default function SimulationPage() {
                         startEdgeId: currentEdgeID,
                       });
 
-                      const newAlternatives = altResponse.data.alternative_routes || [];
+                      const newAlternatives = altResponse.data.alternative_routes;
                       if (newAlternatives.length > 0) {
                         const mainRoute = routeDataRef.current[0];
                         const combinedRoutes = [mainRoute, ...newAlternatives];
@@ -569,7 +592,7 @@ export default function SimulationPage() {
                     newSpRouteData.data.distance = parseFloat(
                       (newSpRouteData.data.distance / 1000).toFixed(2)
                     );
-                    const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
+                    const newAlternatives = alternativeRouteData.data.alternative_routes;
                     newAlternatives.forEach((alt: any) => {
                       alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
                     });
@@ -591,7 +614,7 @@ export default function SimulationPage() {
                     };
                     setPolylineData(newLinedata);
 
-                    const alternativesPolyline = (alternativeRouteData.data.alternative_routes || []).map((route) => {
+                    const alternativesPolyline = alternativeRouteData.data.alternative_routes.map((route) => {
                       const coords = polyline.decode(route.path);
                       return {
                         type: "Feature",
@@ -644,9 +667,6 @@ export default function SimulationPage() {
       }
     }
     
-    if (ws) {
-      ws.close();
-    }
     setIsRunning(false);
 
     if (writeToLog && logResultsRef.current.length > 0) {
@@ -799,6 +819,22 @@ export default function SimulationPage() {
                   {isShowingGpsWindow && <FaCheck size={8} color="white" />}
                 </div>
                 <span className="text-[10px] font-medium text-gray-600">GPS Win</span>
+              </button>
+
+              <button 
+                onClick={() => {
+                  const newVal = !isUsingWasm;
+                  setIsUsingWasm(newVal);
+                  isUsingWasmRef.current = newVal;
+                  if (newVal) wasmMapMatcher.init();
+                  toast.success(newVal ? "WASM enabled" : "WASM disabled");
+                }}
+                className="flex items-center gap-1.5 cursor-pointer"
+              >
+                <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-all ${isUsingWasm ? "bg-blue-500" : "border border-gray-400"}`}>
+                  {isUsingWasm && <FaCheck size={8} color="white" />}
+                </div>
+                <span className="text-[10px] font-medium text-gray-600">WASM</span>
               </button>
             </div>
             <button 

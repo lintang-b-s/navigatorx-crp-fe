@@ -41,6 +41,9 @@ import {
   UPDATE_NAVIGATION_STATE_THRESHOLD_MS
 } from "@/app/lib/constants";
 import gsap from "gsap";
+import { wasmMapMatcher } from "./lib/wasmMapmatch";
+import { FaMicrochip } from "react-icons/fa";
+
 
 const MapComponent = dynamic(
   () => import("@/app/ui/map").then((mod) => mod.MapComponent),
@@ -81,6 +84,7 @@ export default function Home() {
     distanceFromNextTurnPoint: 0,
     currentDirectionIndex: 0,
   });
+
   const { matchedGpsLoc, matchedHeading, distanceFromNextTurnPoint, currentDirectionIndex } = navigationState;
 
   const [gpsHeading, setGpsHeading] = useState<number>(0); // bearing (user heading angle from North)
@@ -298,7 +302,6 @@ export default function Home() {
 
       if (
         alternativeRouteData &&
-        alternativeRouteData.data.alternative_routes != null &&
         alternativeRouteData.data.alternative_routes.length > 0
       ) {
         alternativeRouteData.data.alternative_routes.map((alt) => {
@@ -393,9 +396,13 @@ export default function Home() {
     setNextTurnIndex(index);
   }, []);
 
-  const handleStartRoute = useCallback((start: boolean) => {
+  const handleStartRoute = useCallback(async (start: boolean) => {
+    if (start) {
+      await wasmMapMatcher.init();
+    }
     setRouteStarted(start);
   }, []);
+
 
   useEffect(() => {
     if (orientation?.alpha != null) {
@@ -413,22 +420,14 @@ export default function Home() {
         return;
       }
 
-      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL as string;
-      const ws = new WebSocket(wsUrl);
+      // WASM-only map matching
 
-      ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        toast.error("WebSocket connection error");
-      };
 
       let prevTime: Date = new Date();
       let currentGps: Gps;
-      let watchId: number | null = null;
 
-      ws.onmessage = (event) => {
+      const handleMapMatchResponse = (resp: any) => {
         try {
-          const resp = JSON.parse(event.data);
-
           if (
             resp.data.matched_gps_point.matched_coord.lat == INVALID_LAT &&
             resp.data.matched_gps_point.matched_coord.lon == INVALID_LON
@@ -517,139 +516,145 @@ export default function Home() {
 
           setSnappedEdgeID(resp.data.matched_gps_point.edge_id);
         } catch (err) {
-          toast.error("Failed to parse WebSocket message");
+          toast.error("Failed to process map match result");
         }
       };
 
-      // Start watching GPS only AFTER the WebSocket is open.
-      // On the 2nd navigation, GPS is already warm and fires immediately.
-      // If we register watchPosition before ws is open, the critical k=1
-      // message gets silently dropped and mapMatchStep still increments,
-      // permanently breaking the session.
-      ws.onopen = () => {
-        watchId = navigator.geolocation.watchPosition(
-          async (pos) => {
-            const currentTime = new Date();
-            deadReckoning.current = false;
-            let deltaTime: number = 0;
-            let speed = 0.0;
 
-            if (orientation?.alpha == null) {
-              // buat debugging di hp
-              setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
+
+      const watchId = navigator.geolocation.watchPosition(
+        async (pos) => {
+          const currentTime = new Date();
+          deadReckoning.current = false;
+          let deltaTime: number = 0;
+          let speed = 0.0;
+
+          if (orientation?.alpha == null) {
+            // buat debugging di hp
+            setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
+          }
+
+          let distance =1
+          if (pos.coords.speed !== null && pos.coords.speed !== undefined) {
+            speed = pos.coords.speed;
+          } else if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
+            deltaTime =
+              (currentTime.getTime() -
+                (prevGps.current?.time?.getTime() ?? 0)) /
+              1000.0;
+             distance =
+              haversineDistance(
+                prevGps.current?.lat!,
+                prevGps.current?.lon!,
+                pos.coords.latitude,
+                pos.coords.longitude,
+              ) * 1000; //meter
+            if (deltaTime > 0) {
+              speed = distance / deltaTime; // meter/s
             }
+          }
 
-            if (pos.coords.speed !== null && pos.coords.speed !== undefined) {
-              speed = pos.coords.speed;
-            } else if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
-              deltaTime =
-                (currentTime.getTime() -
-                  (prevGps.current?.time?.getTime() ?? 0)) /
-                1000.0;
-              const distance =
-                haversineDistance(
-                  prevGps.current?.lat!,
-                  prevGps.current?.lon!,
-                  pos.coords.latitude,
-                  pos.coords.longitude,
-                ) * 1000; //meter
-              if (deltaTime > 0) {
-                speed = distance / deltaTime; // meter/s
-              }
+          currentGps = {
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            speed: speed,
+            delta_time: mapMatchStep.current == 1 ? 0 : deltaTime,
+            time: currentTime,
+            dead_reckoning: false,
+          };
+
+          // Speed threshold check: skip if stationary (but not the first step)
+          if (((speed < MIN_SPEED_THRESHOLD || speedMeanK.current < MIN_SPEED_THRESHOLD) && distance < THROTTLE_DISTANCE_THRESHOLD) && mapMatchStep.current > 1) {
+
+            return;
+          }
+
+          
+          let mapMatchRequest: MapMatchRequest = {
+            gps_point: currentGps,
+            k: mapMatchStep.current,
+            candidates: candidates.current,
+            speed_mean_k: speedMeanK.current,
+            speed_std_k: speedStdK.current,
+            last_bearing: lastBearing.current,
+          };
+
+          await wasmMapMatcher.loadTile(pos.coords.latitude, pos.coords.longitude);
+          const resp = wasmMapMatcher.onlineMapMatch(
+            mapMatchRequest.gps_point,
+            mapMatchRequest.k,
+            mapMatchRequest.candidates,
+            mapMatchRequest.speed_mean_k,
+            mapMatchRequest.speed_std_k,
+            mapMatchRequest.last_bearing
+          );
+          if (resp) handleMapMatchResponse({ data: resp });
+
+          mapMatchStep.current += 1;
+
+
+          setRawGpsLoc({ lat: currentGps.lat, lon: currentGps.lon });
+          prevGps.current = currentGps;
+          prevTime = currentTime;
+        },
+        async (err) => {
+          const currentTime = new Date();
+          if (err.code == err.POSITION_UNAVAILABLE || err.code == err.TIMEOUT) {
+            // dead reckoning
+            let now = new Date();
+            if (
+              prevGps &&
+              prevGps.current &&
+              now.getTime() - prevGps.current?.time?.getTime() >
+                LOST_GPS_THRESHOLD
+            ) {
+              deadReckoning.current = true;
+              currentGps = {
+                lat: prevGps.current.lat,
+                lon: prevGps.current.lon,
+                speed: DEFAULT_CONSTANT_SPEED,
+                delta_time: prevTime
+                  ? (currentTime.getTime() - prevTime.getTime()) / 1000.0
+                  : MAP_MATCH_SAMPLING_INTERVAL,
+                time: currentTime,
+                dead_reckoning: deadReckoning.current,
+              };
+
+              let mapMatchRequest: MapMatchRequest = {
+                gps_point: currentGps,
+                k: mapMatchStep.current,
+                candidates: candidates.current,
+                speed_mean_k: speedMeanK.current,
+                speed_std_k: speedStdK.current,
+                last_bearing: lastBearing.current,
+              };
+
+              await wasmMapMatcher.loadTile(currentGps.lat, currentGps.lon);
+              const resp = wasmMapMatcher.onlineMapMatch(
+                mapMatchRequest.gps_point,
+                mapMatchRequest.k,
+                mapMatchRequest.candidates,
+                mapMatchRequest.speed_mean_k,
+                mapMatchRequest.speed_std_k,
+                mapMatchRequest.last_bearing
+              );
+              if (resp) handleMapMatchResponse({ data: resp });
+
+              mapMatchStep.current += 1;
+
+              prevTime = currentTime;
             }
-
-            currentGps = {
-              lat: pos.coords.latitude,
-              lon: pos.coords.longitude,
-              speed: speed,
-              delta_time: mapMatchStep.current == 1 ? 0 : deltaTime,
-              time: currentTime,
-              dead_reckoning: false,
-            };
-
-            // Speed threshold check: skip if stationary (but not the first step)
-            if (speed < MIN_SPEED_THRESHOLD && mapMatchStep.current > 1) {
-              return;
-            }
-
-            let mapMatchRequest: MapMatchRequest = {
-              gps_point: currentGps,
-              k: mapMatchStep.current,
-              candidates: candidates.current,
-              speed_mean_k: speedMeanK.current,
-              speed_std_k: speedStdK.current,
-              last_bearing: lastBearing.current,
-            };
-
-            ws.send(JSON.stringify(mapMatchRequest));
-            mapMatchStep.current += 1;
-
-            setRawGpsLoc({ lat: currentGps.lat, lon: currentGps.lon });
-            prevGps.current = currentGps;
-            prevTime = currentTime;
-          },
-          (err) => {
-            const currentTime = new Date();
-            if (err.code == err.POSITION_UNAVAILABLE || err.code == err.TIMEOUT) {
-              // dead reckoning
-              let now = new Date();
-              if (
-                prevGps &&
-                prevGps.current &&
-                now.getTime() - prevGps.current?.time?.getTime() >
-                  LOST_GPS_THRESHOLD
-              ) {
-                deadReckoning.current = true;
-                currentGps = {
-                  lat: prevGps.current.lat,
-                  lon: prevGps.current.lon,
-                  speed: DEFAULT_CONSTANT_SPEED,
-                  delta_time: prevTime
-                    ? (currentTime.getTime() - prevTime.getTime()) / 1000.0
-                    : MAP_MATCH_SAMPLING_INTERVAL,
-                  time: currentTime,
-                  dead_reckoning: deadReckoning.current,
-                };
-
-                let mapMatchRequest: MapMatchRequest = {
-                  gps_point: currentGps,
-                  k: mapMatchStep.current,
-                  candidates: candidates.current,
-                  speed_mean_k: speedMeanK.current,
-                  speed_std_k: speedStdK.current,
-                  last_bearing: lastBearing.current,
-                };
-
-                if (ws.readyState === WebSocket.OPEN) {
-                  ws.send(JSON.stringify(mapMatchRequest));
-                  mapMatchStep.current += 1;
-                }
-
-                prevTime = currentTime;
-              }
-            }
-          },
-          {
-            enableHighAccuracy: true,
-            maximumAge: 0,
-            timeout: 5000,
-          },
-        );
-      };
-
-      ws.onclose = (event) => {
-        if (watchId !== null) {
-          navigator.geolocation.clearWatch(watchId);
-        }
-      };
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 5000,
+        },
+      );
 
       return () => {
-        if (watchId !== null) {
-          navigator.geolocation.clearWatch(watchId);
-        }
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          ws.close(1000, "");
-        }
+        navigator.geolocation.clearWatch(watchId);
       };
     } else {
       mapMatchStep.current = 1;
@@ -784,7 +789,7 @@ export default function Home() {
               startEdgeId: snappedEdgeID,
             };
             const altResponse = await fetchAlternativeRoutes(reqBody);
-            const newAlternatives = altResponse.data.alternative_routes || [];
+            const newAlternatives = altResponse.data.alternative_routes;
             if (newAlternatives.length > 0) {
               newAlternatives.forEach((alt: any) => {
                 alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
@@ -822,9 +827,9 @@ export default function Home() {
       }
     }
 
-    const firstDirectionEdgeIDs = usedRoute?.driving_directions[0]?.edge_ids || [];
-    if (firstDirectionEdgeIDs.includes(snappedEdgeID) || mapMatchStep.current < 5) {
-      // skip re-route logic during the initial "settling" phase or if still in first direction
+    const firstRouteEdgeID = usedRoute?.driving_directions[0]?.edge_ids[0];
+    if (snappedEdgeID == firstRouteEdgeID || mapMatchStep.current == 1) {
+      // skip re-route logic if current user location == source loc.
       return;
     }
 
@@ -849,12 +854,12 @@ export default function Home() {
           }
         }
         if (isOffTheRoute && snappedEdgeID !== -1) {
-          if (mapMatchStep.current < 5 && isInitialReroutePerformed.current) {
+          if (mapMatchStep.current <= 1 && isInitialReroutePerformed.current) {
             return;
           }
           isReroutingRef.current = true;
           try {
-            if (mapMatchStep.current < 5) {
+            if (mapMatchStep.current <= 1) {
               isInitialReroutePerformed.current = true;
             }
             const reqBody = {
@@ -873,7 +878,7 @@ export default function Home() {
             newSpRouteData.data.distance = parseFloat(
               (newSpRouteData.data.distance / 1000).toFixed(2)
             );
-            const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
+            const newAlternatives = alternativeRouteData.data.alternative_routes;
             newAlternatives.forEach((alt: any) => {
               alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
             });
@@ -1012,5 +1017,7 @@ export default function Home() {
         <SearchResults places={searchResults} select={onSelectDestination} />
       )}
     </main>
+
+
   );
 }
