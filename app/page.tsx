@@ -38,7 +38,9 @@ import {
   DEFAULT_CONSTANT_SPEED,
   MAP_MATCH_SAMPLING_INTERVAL,
   LOST_GPS_THRESHOLD,
-  UPDATE_NAVIGATION_STATE_THRESHOLD_MS
+  UPDATE_NAVIGATION_STATE_THRESHOLD_MS,
+  MIN_ANIMATION_DURATION,
+  MAX_ANIMATION_DURATION
 } from "@/app/lib/constants";
 import gsap from "gsap";
 import { wasmMapMatcher } from "./lib/wasmMapmatch";
@@ -487,7 +489,7 @@ export default function Home() {
             if (speedMeanK.current > 0) {
               duration = distance / speedMeanK.current;
             }
-            duration = Math.max(0.1, Math.min(duration, 3.0));
+            duration = Math.max(MIN_ANIMATION_DURATION, Math.min(duration, MAX_ANIMATION_DURATION));
 
             let diff = targetHeading - currentHeadingRef.current;
             if (diff > 180) diff -= 360;

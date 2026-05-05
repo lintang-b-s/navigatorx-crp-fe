@@ -9,3 +9,5 @@ export const MAP_MATCH_SAMPLING_INTERVAL = 1.0; // seconds
 export const LOST_GPS_THRESHOLD = 2000; // ms
 export const MIN_SPEED_THRESHOLD = 0.4; // m/s (approx 1 km/h)
 export const UPDATE_NAVIGATION_STATE_THRESHOLD_MS = 38
+export const MIN_ANIMATION_DURATION = 0.001
+export const MAX_ANIMATION_DURATION = 1
