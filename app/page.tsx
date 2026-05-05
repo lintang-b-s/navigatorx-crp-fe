@@ -21,7 +21,7 @@ import {
   Gps,
   MapMatchRequest,
 } from "./lib/mapmatchApi";
-import { haversineDistance, project, gt } from "./lib/util";
+import { haversineDistance,  mercatorDistance } from "./lib/util";
 import {
   getCurrentUserDirectionIndex,
   getDistanceFromUserToNextTurn,
@@ -31,7 +31,6 @@ import {
 import { useDeviceOrientation } from "./hook";
 import { 
   THROTTLE_DISTANCE_THRESHOLD, 
-  THROTTLE_HEADING_THRESHOLD,
   INVALID_LAT,
   INVALID_LON,
   MIN_SPEED_THRESHOLD,
@@ -136,6 +135,7 @@ export default function Home() {
   const lastFetchedAlternativesStep = useRef<number>(-1);
   const currentGpsLocRef = useRef<Coord | null>(null);
   const currentHeadingRef = useRef<number>(0);
+  const hasArrived = useRef(false);
 
   const parseCoordinates = useCallback((input: string) => {
     const coordRegex =
@@ -402,6 +402,7 @@ export default function Home() {
     if (start) {
       await wasmMapMatcher.init();
     }
+    hasArrived.current = false;
     setRouteStarted(start);
   }, []);
 
@@ -478,18 +479,20 @@ export default function Home() {
               matchedHeading: targetHeading,
             }));
           } else {
-            const distance = haversineDistance(
-              currentGpsLocRef.current.lat,
-              currentGpsLocRef.current.lon,
-              matched.lat,
-              matched.lon
-            ) * 1000;
-            
+           
             let duration = 0.5;
-            if (speedMeanK.current > 0) {
-              duration = distance / speedMeanK.current;
+            if (prevGps.current?.time && currentGps?.time) {
+              duration =
+                (currentGps.time.getTime() - prevGps.current.time.getTime()) /
+                1000;
             }
-            duration = Math.max(MIN_ANIMATION_DURATION, Math.min(duration, MAX_ANIMATION_DURATION));
+
+            
+            duration = Math.max(
+              MIN_ANIMATION_DURATION,
+              Math.min(duration, MAX_ANIMATION_DURATION),
+            );
+
 
             let diff = targetHeading - currentHeadingRef.current;
             if (diff > 180) diff -= 360;
@@ -729,12 +732,30 @@ export default function Home() {
             lastDist = newDist;
             stateChanged = true;
           }
+
+          // Arrival check
+          if (destinationLoc && !hasArrived.current) {
+            const distToDest =
+              haversineDistance(
+                curLat,
+                curLon,
+                destinationLoc.osm_object.lat,
+                destinationLoc.osm_object.lon,
+              ) * 1000;
+
+            if (distToDest < 15) {
+              toast.success("You have arrived at your destination!", {
+                duration: 5000,
+                icon: "🏁",
+              });
+              hasArrived.current = true;
+              setRouteStarted(false);
+            }
+          }
         }
 
         // 2. Throttled state update for UI re-render (Marker position)
-        const p1 = project(lastLat, lastLon);
-        const p2 = project(curLat, curLon);
-        const dist = Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+        const dist = mercatorDistance(lastLat, lastLon, curLat, curLon);
         
         // Threshold: 0.5m or 2 degrees to avoid overloading React
         if (dist > 0.5 || Math.abs(curH - lastH) > 2) {

@@ -19,13 +19,13 @@ export class WasmMapMatcher {
         try {
             // 1. Load wasm_exec.js if not already present
             if (!(window as any).Go) {
-                await this.loadScript("/wasm_exec.js");
+                await this.loadScript(`/wasm_exec.js?v=${Date.now()}`);
             }
 
             // 2. Instantiate WASM
             const go = new (window as any).Go();
             const result = await WebAssembly.instantiateStreaming(
-                fetch("/online_map_matcher.wasm"),
+                fetch(`/online_map_matcher.wasm?v=${Date.now()}`),
                 go.importObject
             );
             go.run(result.instance);
