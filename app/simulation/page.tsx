@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import toast from "react-hot-toast";
+import axios from "axios";
 import { SimulationPanel } from "@/app/ui/simulationPanel";
 import { Coord, MapMatchRequest, Candidate } from "@/app/lib/mapmatchApi";
 import { haversineDistance, project, gt } from "@/app/lib/util";
@@ -27,7 +28,7 @@ import {
   MIN_SPEED_THRESHOLD,
   UPDATE_NAVIGATION_STATE_THRESHOLD_MS
 } from "@/app/lib/constants";
-
+import { wasmMapMatcher } from "@/app/lib/wasmMapmatch";
 
 const MapComponent = dynamic(
   () => import("@/app/ui/map").then((mod) => mod.MapComponent),
@@ -65,6 +66,11 @@ export default function SimulationPage() {
   const currentGpsLocRef = useRef<Coord | null>(null);
   const currentHeadingRef = useRef<number>(0);
   const logResultsRef = useRef<{ edge_id: number; lat: number; lon: number }[]>([]);
+  const [isUsingWebSocket, setIsUsingWebSocket] = useState(false);
+  const isUsingWebSocketRef = useRef(false);
+  const [isUsingWasm, setIsUsingWasm] = useState(false);
+  const isUsingWasmRef = useRef(false);
+  const socketRef = useRef<WebSocket | null>(null);
   
   // Dummy data required by MapComponent props
   const [userLoc, setUserLoc] = useState({ longitude: -100, latitude: 40 });
@@ -80,23 +86,13 @@ export default function SimulationPage() {
   const [isDrivingDirectionEnabled, setIsDrivingDirectionEnabled] = useState(false);
   
   // States for simplified UI
-  const [isUsingWebSocket, setIsUsingWebSocket] = useState(false);
-  const [isUsingWasm, setIsUsingWasm] = useState(false);
   const [isShowingGpsWindow, setIsShowingGpsWindow] = useState(false);
   const isShowingGpsWindowRef = useRef(false);
-  const isUsingWebSocketRef = useRef(false);
-  const isUsingWasmRef = useRef(false);
-  const isWasmReadyRef = useRef(false);
   const routeDataRef = useRef<RouteCRPResponse[]>([]);
   const activeRouteRef = useRef(0);
   const snappedEdgeIDRef = useRef(-1);
 
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "/wasm_exec.js";
-    script.async = true;
-    document.body.appendChild(script);
-  }, []);
+
 
   useEffect(() => { routeDataRef.current = routeData; }, [routeData]);
   useEffect(() => { activeRouteRef.current = activeRoute; }, [activeRoute]);
@@ -111,18 +107,22 @@ export default function SimulationPage() {
     stopSimulationRef.current = true;
     setGpsWindowPoints([]);
     setRawGpsLoc(undefined);
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
   }, []);
-
-  const onSimulationStart = useCallback(async (
-    points: any[], 
-    useWebSocket: boolean, 
-    showGpsWindow: boolean, 
-    drivingDirection: boolean,
-    writeToLog: boolean,
-    useWasm: boolean,
-    fileName: string,
-    trackName: string
-  ) => {
+  const onSimulationStart = useCallback(
+    async (
+      points: any[],
+      useWebSocket: boolean,
+      showGpsWindow: boolean,
+      drivingDirection: boolean,
+      writeToLog: boolean,
+      useWasm: boolean,
+      fileName: string,
+      trackName: string
+    ) => {
     if (points.length === 0 || isRunning) return;
     
     const simulationId = Date.now().toString();
@@ -131,30 +131,29 @@ export default function SimulationPage() {
     setIsRunning(true);
     stopSimulationRef.current = false;
     setGpsWindowPoints([]);
-    setIsDrivingDirectionEnabled(drivingDirection);
-    setIsUsingWebSocket(useWebSocket);
-    setIsUsingWasm(useWasm);
     setIsShowingGpsWindow(showGpsWindow);
     isShowingGpsWindowRef.current = showGpsWindow;
+    setIsDrivingDirectionEnabled(drivingDirection);
+    setIsUsingWebSocket(useWebSocket);
     isUsingWebSocketRef.current = useWebSocket;
+    setIsUsingWasm(useWasm);
     isUsingWasmRef.current = useWasm;
 
-    if (useWasm && !isWasmReadyRef.current) {
-      const toastId = toast.loading("Initializing WASM Engine (loading data)...");
-      try {
-        const go = new (window as any).Go();
-        const result = await WebAssembly.instantiateStreaming(
-          fetch("/mapmatcher.wasm"),
-          go.importObject
-        );
-        go.run(result.instance);
-        isWasmReadyRef.current = true;
-        toast.success("WASM Engine Ready", { id: toastId });
-      } catch (err: any) {
-        console.error("WASM Init Error:", err);
-        toast.error("Failed to init WASM: " + err.message + ". Falling back to other modes.", { id: toastId });
-        setIsUsingWasm(false);
-        isUsingWasmRef.current = false;
+    if (useWasm) {
+      await wasmMapMatcher.init();
+    }
+
+    if (useWebSocket) {
+      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL || "ws://localhost:6060/ws/onlineMapMatch";
+      socketRef.current = new WebSocket(wsUrl);
+      socketRef.current.onopen = () => console.log("WebSocket connected");
+      socketRef.current.onclose = () => console.log("WebSocket disconnected");
+      socketRef.current.onerror = (err) => console.error("WebSocket error:", err);
+      // wait for connection
+      let timeout = 0;
+      while (socketRef.current.readyState !== WebSocket.OPEN && timeout < 20) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        timeout++;
       }
     }
 
@@ -259,22 +258,6 @@ export default function SimulationPage() {
     let prevTime: Date | null = null;
     let lastBearing = 0.0;
 
-    let ws: WebSocket | null = null;
-    if (useWebSocket) {
-      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL as string;
-      ws = new WebSocket(wsUrl);
-      ws.onerror = (e) => {
-        console.error("WebSocket Error", e);
-        toast.error("WebSocket connection failed.");
-        onSimulationStop();
-      }
-      
-      await new Promise((resolve) => {
-        if (ws) {
-          ws.onopen = () => resolve(true);
-        }
-      });
-    }
 
     const httpUrl = process.env.NEXT_PUBLIC_MAP_MATCH_HTTP_URL || "http://localhost:6060/api/onlineMapMatch";
 
@@ -367,30 +350,28 @@ export default function SimulationPage() {
       try {
         let apiResponse;
 
-        if (isUsingWasmRef.current && (window as any).OnlineMapMatch) {
-          const res = (window as any).OnlineMapMatch(
-            mapMatchRequest.gps_point,
-            mapMatchRequest.k,
-            mapMatchRequest.candidates,
-            mapMatchRequest.speed_mean_k,
-            mapMatchRequest.speed_std_k,
-            mapMatchRequest.last_bearing
-          );
-          apiResponse = { data: res };
-        } else if (isUsingWebSocketRef.current && ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(mapMatchRequest));
-          apiResponse = await new Promise((resolve) => {
-            ws!.onmessage = (event) => {
-              resolve(JSON.parse(event.data));
-            };
-          });
-        } else {
-          const response = await fetch(httpUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(mapMatchRequest),
-          });
-          apiResponse = await response.json();
+        // Choice of matching mode
+        if (mapMatchRequest) {
+          if (isUsingWasmRef.current) {
+            await wasmMapMatcher.loadTile(point.Latitude, point.Longitude);
+            const res = wasmMapMatcher.onlineMapMatch(
+              mapMatchRequest.gps_point,
+              mapMatchRequest.k,
+              mapMatchRequest.candidates,
+              mapMatchRequest.speed_mean_k,
+              mapMatchRequest.speed_std_k,
+              mapMatchRequest.last_bearing
+            );
+            apiResponse = { data: res };
+          } else if (isUsingWebSocketRef.current && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            socketRef.current.send(JSON.stringify(mapMatchRequest));
+            const msg = await new Promise<any>((resolve) => {
+              socketRef.current!.onmessage = (event) => resolve(JSON.parse(event.data));
+            });
+            apiResponse = { data: msg.data };
+          } else {
+            apiResponse = await axios.post(httpUrl, mapMatchRequest);
+          }
         }
         
 
@@ -686,9 +667,6 @@ export default function SimulationPage() {
       }
     }
     
-    if (ws) {
-      ws.close();
-    }
     setIsRunning(false);
 
     if (writeToLog && logResultsRef.current.length > 0) {
@@ -841,6 +819,22 @@ export default function SimulationPage() {
                   {isShowingGpsWindow && <FaCheck size={8} color="white" />}
                 </div>
                 <span className="text-[10px] font-medium text-gray-600">GPS Win</span>
+              </button>
+
+              <button 
+                onClick={() => {
+                  const newVal = !isUsingWasm;
+                  setIsUsingWasm(newVal);
+                  isUsingWasmRef.current = newVal;
+                  if (newVal) wasmMapMatcher.init();
+                  toast.success(newVal ? "WASM enabled" : "WASM disabled");
+                }}
+                className="flex items-center gap-1.5 cursor-pointer"
+              >
+                <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-all ${isUsingWasm ? "bg-blue-500" : "border border-gray-400"}`}>
+                  {isUsingWasm && <FaCheck size={8} color="white" />}
+                </div>
+                <span className="text-[10px] font-medium text-gray-600">WASM</span>
               </button>
             </div>
             <button 

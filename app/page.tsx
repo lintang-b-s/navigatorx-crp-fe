@@ -41,6 +41,9 @@ import {
   UPDATE_NAVIGATION_STATE_THRESHOLD_MS
 } from "@/app/lib/constants";
 import gsap from "gsap";
+import { wasmMapMatcher } from "./lib/wasmMapmatch";
+import { FaMicrochip } from "react-icons/fa";
+
 
 const MapComponent = dynamic(
   () => import("@/app/ui/map").then((mod) => mod.MapComponent),
@@ -81,6 +84,7 @@ export default function Home() {
     distanceFromNextTurnPoint: 0,
     currentDirectionIndex: 0,
   });
+
   const { matchedGpsLoc, matchedHeading, distanceFromNextTurnPoint, currentDirectionIndex } = navigationState;
 
   const [gpsHeading, setGpsHeading] = useState<number>(0); // bearing (user heading angle from North)
@@ -392,9 +396,13 @@ export default function Home() {
     setNextTurnIndex(index);
   }, []);
 
-  const handleStartRoute = useCallback((start: boolean) => {
+  const handleStartRoute = useCallback(async (start: boolean) => {
+    if (start) {
+      await wasmMapMatcher.init();
+    }
     setRouteStarted(start);
   }, []);
+
 
   useEffect(() => {
     if (orientation?.alpha != null) {
@@ -412,21 +420,14 @@ export default function Home() {
         return;
       }
 
-      const wsUrl = process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL as string;
-      const ws = new WebSocket(wsUrl);
+      // WASM-only map matching
 
-      ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        toast.error("WebSocket connection error");
-      };
 
       let prevTime: Date = new Date();
       let currentGps: Gps;
 
-      ws.onmessage = (event) => {
+      const handleMapMatchResponse = (resp: any) => {
         try {
-          const resp = JSON.parse(event.data);
-
           if (
             resp.data.matched_gps_point.matched_coord.lat == INVALID_LAT &&
             resp.data.matched_gps_point.matched_coord.lon == INVALID_LON
@@ -515,9 +516,11 @@ export default function Home() {
 
           setSnappedEdgeID(resp.data.matched_gps_point.edge_id);
         } catch (err) {
-          toast.error("Failed to parse WebSocket message");
+          toast.error("Failed to process map match result");
         }
       };
+
+
 
       const watchId = navigator.geolocation.watchPosition(
         async (pos) => {
@@ -531,6 +534,7 @@ export default function Home() {
             setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
           }
 
+          let distance =1
           if (pos.coords.speed !== null && pos.coords.speed !== undefined) {
             speed = pos.coords.speed;
           } else if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
@@ -538,7 +542,7 @@ export default function Home() {
               (currentTime.getTime() -
                 (prevGps.current?.time?.getTime() ?? 0)) /
               1000.0;
-            const distance =
+             distance =
               haversineDistance(
                 prevGps.current?.lat!,
                 prevGps.current?.lon!,
@@ -560,10 +564,12 @@ export default function Home() {
           };
 
           // Speed threshold check: skip if stationary (but not the first step)
-          if (speed < MIN_SPEED_THRESHOLD && mapMatchStep.current > 1) {
+          if (((speed < MIN_SPEED_THRESHOLD || speedMeanK.current < MIN_SPEED_THRESHOLD) && distance < THROTTLE_DISTANCE_THRESHOLD) && mapMatchStep.current > 1) {
+
             return;
           }
 
+          
           let mapMatchRequest: MapMatchRequest = {
             gps_point: currentGps,
             k: mapMatchStep.current,
@@ -573,17 +579,25 @@ export default function Home() {
             last_bearing: lastBearing.current,
           };
 
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(mapMatchRequest));
-          }
+          await wasmMapMatcher.loadTile(pos.coords.latitude, pos.coords.longitude);
+          const resp = wasmMapMatcher.onlineMapMatch(
+            mapMatchRequest.gps_point,
+            mapMatchRequest.k,
+            mapMatchRequest.candidates,
+            mapMatchRequest.speed_mean_k,
+            mapMatchRequest.speed_std_k,
+            mapMatchRequest.last_bearing
+          );
+          if (resp) handleMapMatchResponse({ data: resp });
 
           mapMatchStep.current += 1;
+
 
           setRawGpsLoc({ lat: currentGps.lat, lon: currentGps.lon });
           prevGps.current = currentGps;
           prevTime = currentTime;
         },
-        (err) => {
+        async (err) => {
           const currentTime = new Date();
           if (err.code == err.POSITION_UNAVAILABLE || err.code == err.TIMEOUT) {
             // dead reckoning
@@ -615,9 +629,16 @@ export default function Home() {
                 last_bearing: lastBearing.current,
               };
 
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(mapMatchRequest));
-              }
+              await wasmMapMatcher.loadTile(currentGps.lat, currentGps.lon);
+              const resp = wasmMapMatcher.onlineMapMatch(
+                mapMatchRequest.gps_point,
+                mapMatchRequest.k,
+                mapMatchRequest.candidates,
+                mapMatchRequest.speed_mean_k,
+                mapMatchRequest.speed_std_k,
+                mapMatchRequest.last_bearing
+              );
+              if (resp) handleMapMatchResponse({ data: resp });
 
               mapMatchStep.current += 1;
 
@@ -631,14 +652,9 @@ export default function Home() {
           timeout: 5000,
         },
       );
-      ws.onclose = (event) => {
-        navigator.geolocation.clearWatch(watchId);
-      };
 
       return () => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close(1000, "");
-        }
+        navigator.geolocation.clearWatch(watchId);
       };
     } else {
       mapMatchStep.current = 1;
@@ -1001,5 +1017,7 @@ export default function Home() {
         <SearchResults places={searchResults} select={onSelectDestination} />
       )}
     </main>
+
+
   );
 }

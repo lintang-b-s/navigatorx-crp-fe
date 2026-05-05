@@ -444,7 +444,12 @@ function showRouteResultMobile(
           </div>
           <div className="flex flex-col">
             <p className="text-xl font-black text-white leading-tight">
-              {formatDistance(props.distanceFromNextTurnPoint)} <span className="text-sm font-normal opacity-70">m</span>
+              {props.distanceFromNextTurnPoint >= 1000 
+                ? new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(props.distanceFromNextTurnPoint / 1000)
+                : new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(props.distanceFromNextTurnPoint)} 
+              <span className="text-sm font-normal opacity-70 ml-1">
+                {props.distanceFromNextTurnPoint >= 1000 ? "km" : "m"}
+              </span>
             </p>
             <p className="text-sm font-bold text-blue-400 line-clamp-1">
               {

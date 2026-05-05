@@ -49,3 +49,11 @@ dataexclude/
 !data/noisy_data_wgs84_3_5_1_0.csv
 
 !data/noisy_data_solo_50v_3600s_1_0dt_3_5n_reroute/
+
+
+
+
+!data/noisy_data_solo_50v_3600s_1_0dt_3_5n_reroute/
+!data/noisy_data_solo_50v_3600s_1_0dt_3_5n_reroute/**
+notes/
+

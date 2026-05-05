@@ -28,6 +28,12 @@ export default function RootLayout({
             position="top-center"
             toastOptions={{
               duration: 800,
+              success: {
+                duration: 800,
+              },
+              error: {
+                duration: 800,
+              },
             }}
           />
         </Suspense>
