@@ -43,9 +43,9 @@ export class WasmMapMatcher {
             }
 
             // 4. Initialize Graph with metadata
-            console.log(`[WasmMapMatcher] Fetching tile-init from: ${this.apiUrl}/api/tile-init`);
+
             const response = await axios.get(`${this.apiUrl}/api/tile-init`);
-            console.log("[WasmMapMatcher] Tile-init response:", response.data);
+
             
             const number_of_vertices = response.data?.data?.number_of_vertices;
             
@@ -53,13 +53,13 @@ export class WasmMapMatcher {
                 throw new Error(`Invalid number_of_vertices received: ${number_of_vertices}. Check if backend is running on ${this.apiUrl}`);
             }
 
-            console.log(`[WasmMapMatcher] Fetching transition matrix from: ${this.apiUrl}/api/tile-init-transition-matrix`);
+
             const matrixResponse = await axios.get(`${this.apiUrl}/api/tile-init-transition-matrix`, {
                 responseType: 'arraybuffer'
             });
             const matrixBytes = new Uint8Array(matrixResponse.data);
 
-            console.log(`[WasmMapMatcher] Initializing graph with ${number_of_vertices} vertices and transition matrix`);
+
             (window as any).InitializeMapMatchingGraph(number_of_vertices, matrixBytes);
 
 
@@ -89,7 +89,7 @@ export class WasmMapMatcher {
         if (this.currentTile === gh) return;
         // only RebuildMapMatchGraph jika current user gehoash tile berubah...
         try {
-            console.log(`[WasmMapMatcher] Rebuilding graph with tile: ${gh}`);
+
             const response = await axios.get(`${this.apiUrl}/api/tile/${gh}`, {
                 responseType: 'arraybuffer'
             });
@@ -97,7 +97,7 @@ export class WasmMapMatcher {
             const tileData = new Uint8Array(response.data);
             (window as any).RebuildMapMatchGraph(tileData);
             this.currentTile = gh;
-            console.log(`[WasmMapMatcher] Tile ${gh} loaded and graph rebuilt.`);
+
         } catch (error) {
             console.warn(`[WasmMapMatcher] Failed to load tile ${gh}:`, error);
         }
