@@ -22,7 +22,6 @@ import { FaCheck } from "react-icons/fa";
 import { CiStop1 } from "react-icons/ci";
 import { 
   THROTTLE_DISTANCE_THRESHOLD, 
-  THROTTLE_HEADING_THRESHOLD,
   INVALID_LAT,
   INVALID_LON,
   MIN_SPEED_THRESHOLD,
