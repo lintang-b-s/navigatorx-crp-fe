@@ -17,18 +17,30 @@ The primary objectives of this project are:
 
 ## 1. Online Map Matching
 
-Online map matching aligns noisy raw GPS coordinates from the device to actual road segments (edges) on the map in real-time.
+Online map matching aligns noisy raw GPS coordinates from the device to actual road segments (edges) on the map in real-time. NavigatorX implements a high-performance **WebAssembly (WASM)** engine that imitates the **client-side real-time map matching architecture** pioneered by [Lyft Engineering](https://eng.lyft.com/using-client-side-map-data-to-improve-real-time-positioning-a382585ac6e). 
 
-### Mechanism:
-- **Initialization**: Triggered when `routeStarted` is set to `true`. Establishes a WebSocket connection to the backend Map Matcher service (`NEXT_PUBLIC_MAP_MATCH_WS_URL`).
-- **Data Collection**: Uses `navigator.geolocation.watchPosition` to get device GPS updates at high frequency (up to 1 update/sec depending on OS).
-- **Speed Calculation**: If device doesn't report speed directly, it calculates speed using Haversine distance between consecutive GPS points divided by `delta_time`.
-- **WebSocket Request (`MapMatchRequest`)**: Sends raw `gps_point` (lat, lon, speed, delta_time, dead_reckoning flag), step number `k`, previous `candidates`, `speed_mean_k`, `speed_std_k`, and `last_bearing`.
-- **Dead Reckoning Fallback**: If GPS signal is lost (e.g., timeout or unavailable error) and the time since last GPS point exceeds `LOST_GPS_THRESHOLD`, the app enters dead reckoning mode. It predicts the current GPS coordinate based on the previous known coordinate and speed, and sends a dead reckoning request to the WS.
-- **WebSocket Response Handling**: 
-  - Backend responds with the actual `matched_coord` (lat, lon) on the road, `predicted_gps_coord` (for dead reckoning validation), `candidates`, and most importantly: **`edge_id` (snappedEdgeID)**.
-  - Updates React state `snappedEdgeID` which drives routing logic.
-- **Smooth Marker Animation (60 FPS)**: Instead of updating React state on every frame (which causes "Maximum update depth exceeded" errors), `map.tsx` relies on `gsap` (GreenSock) inside an imperative loop. It animates the `currentGpsLocRef` and `currentHeadingRef` values from their current positions to the newly received `matched_coord` over the estimated travel duration, calculating intermediate positions smoothly at 60 FPS using `requestAnimationFrame`.
+The logic specifically follows the **Multiple Hypothesis Technique (MHT)** and **Route Prediction** model described in:
+
+> [1] Taguchi, S., Koide, S. and Yoshimura, T. (2019) “Online Map Matching With Route Prediction,” IEEE Transactions on Intelligent Transportation Systems, 20(1), pp. 338–347. [Available at IEEE](https://doi.org/10.1109/TITS.2018.2812147).
+
+### Core Mechanism: Multiple Hypothesis Technique (MHT)
+Unlike traditional HMM-based methods that introduce latency by waiting for future GPS points (Viterbi), NavigatorX uses MHT to provide **zero-latency matching**. It maintains a set of **weighted hypotheses (candidates)** for the current road segment.
+
+1.  **Hypothesis Maintenance**: The state is represented as a set of candidates $C = \{(c_i.e, c_i.w)\}$, where $e$ is an edge and $w$ is its posterior probability.
+2.  **Route Prediction (Virtual Future)**: The engine uses a probabilistic route prediction model to estimate the likelihood of reaching reachable road segments. This serves as a "virtual future," allowing the system to evaluate current candidates without waiting for subsequent GPS data.
+3.  **Recursive Bayesian Update**: When a new GPS point $g_k$ is received, candidate weights are updated:
+    - **Prediction Step**: Enumerate reachable segments and calculate transition probability $p(r_k|r_{k-1})$ based on the route prediction model.
+    - **Filtering Step**: Update weights by multiplying the predicted probability with the **Observation Probability** $p(g_k|r_k)$ (Gaussian distribution of GPS distance to road).
+4.  **Pruning & Integration**: To maintain efficiency, candidates with weights below a threshold are pruned, and multiple hypotheses leading to the same segment are integrated (summed).
+
+### Implementation Details:
+- **Initialization**: Triggered when `routeStarted` is set to `true`. Initializes the WASM engine via `wasmMapMatcher.init()`. It loads `wasm_exec.js` and `online_map_matcher.wasm` with cache-busting query parameters.
+- **Graph Context & Dynamic Tiles**: 
+  - NavigatorX uses **Geohashing** (level 6) to partition map data.
+  - As the user moves, `loadTile(lat, lon)` fetches tile-specific **CSR (Compressed Sparse Row)** graph data to rebuild the local matching graph on-the-fly.
+- **Local Execution**: The matching logic runs entirely on the client (Go-compiled WASM), eliminating server round-trip latency and enabling real-time UI synchronization.
+- **Dead Reckoning**: If GPS signal is lost (`LOST_GPS_THRESHOLD` exceeded), the engine uses a **constant velocity model** to predict the next coordinate, feeding it back into the MHT process to maintain path continuity.
+- **Smooth Marker Animation (60 FPS)**: Uses `gsap` (GreenSock) inside an imperative `requestAnimationFrame` loop to animate the car marker between matched coordinates, filtering out GPS jitter and providing a premium navigation experience.
 
 ## 2. Driving Directions
 
@@ -88,8 +100,10 @@ Found in `app/simulation/page.tsx`, this feature allows developers and testers t
 
 ### Mechanism:
 - **Data Loading**: Loads an array of predefined `points` (raw GPS data).
-- **Execution Loop**: Uses an imperative loop (with delays) to step through each GPS point. The delay is calculated from the time differences (`datetime_utc`) to match real-time driving speeds, subject to a `MIN_SPEED_THRESHOLD`.
-- **Map Matching Config**: Users can toggle between WebSocket mode (`isUsingWebSocket`) or HTTP polling.
+- **Execution Loop**: Uses an imperative loop (with delays) to step through each GPS point. The delay is calculated from the time differences (`datetime_utc`) to match real-time driving speeds.
+- **Map Matching Config**: Users can choose between:
+  - **WASM Mode**: Exclusively uses the client-side WebAssembly engine (`wasmMapMatcher`), including CSR graph tile loading.
+  - **WebSocket/HTTP Mode**: Legacy modes that proxy requests to a backend service.
 - **GPS Window Buffer**: Can visually render a window of raw GPS points around the current point (`isShowingGpsWindow`), creating a red dot buffer on the map to visualize raw input noise versus the snapped route.
 - **Animation and Events**: It uses the same imperative `gsap.to` animation block and distance thresholds as the live application to accurately test UI responsiveness. At the end, it allows downloading a log of the matched points (edge IDs and coordinates).
 
