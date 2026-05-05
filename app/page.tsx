@@ -716,7 +716,12 @@ export default function Home() {
 
           const newDist = getDistanceFromUserToNextTurn({
             matchedGpsLoc: { lat: curLat, lon: curLon },
-            nextTurnPoint: usedRouteDirections[directionsIndex].turn_point,
+            nextTurnPoint: usedRouteDirections.length > 0
+              ? usedRouteDirections[directionsIndex].turn_point
+              : {
+                  lat: destinationLoc?.osm_object.lat ?? 0,
+                  lon: destinationLoc?.osm_object.lon ?? 0,
+                },
           }) * 1000.0;
           
           if (Math.abs(newDist - lastDist) > 1) {

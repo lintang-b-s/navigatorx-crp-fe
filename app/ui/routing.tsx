@@ -431,9 +431,9 @@ function showRouteResultMobile(
           <div className="bg-white/10 p-2 rounded-xl">
             <Image
               src={getTurnIcon(
-                props.routeDataCRP![activeRoute].driving_directions[
+                props.routeDataCRP![activeRoute].driving_directions.length > 0 ?  props.routeDataCRP![activeRoute].driving_directions[
                   props.currentDirectionIndex
-                ].turn_type,
+                ].turn_type: "CONTINUE_ONTO",
                 "icons_white",
               )}
               width={42}
@@ -453,9 +453,9 @@ function showRouteResultMobile(
             </p>
             <p className="text-sm font-bold text-blue-400 line-clamp-1">
               {
-                props.routeDataCRP![activeRoute].driving_directions[
+                props.routeDataCRP![activeRoute].driving_directions.length> 0 ?  props.routeDataCRP![activeRoute].driving_directions[
                   props.currentDirectionIndex
-                ].street_name
+                ].street_name :""
               }
             </p>
           </div>

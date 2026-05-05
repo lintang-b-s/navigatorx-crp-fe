@@ -698,7 +698,7 @@ const ImperativeNavigationMarker = ({
 
     const el = document.createElement("div");
     el.className =
-      "bg-[#F7FBFA]/50 flex items-center justify-center rounded-full w-[50px] h-[50px]";
+      "bg-[#F7FBFA]/80 flex items-center justify-center rounded-full w-[50px] h-[50px]";
     const img = document.createElement("img");
     img.src = "/navigation_material.svg";
     img.alt = "navigation icon";
