@@ -57,3 +57,4 @@ dataexclude/
 !data/noisy_data_solo_50v_3600s_1_0dt_3_5n_reroute/**
 notes/
 
+!public/online_map_matcher.wasm
