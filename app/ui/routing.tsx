@@ -474,8 +474,8 @@ function showRouteEtaAndDistance(
   const timeSpent = props.timeSpent ?? 0;
   const distanceTraveled = props.distanceTraveled ?? 0;
 
-  const remainingTime = Math.max(0, totalTime - timeSpent);
-  const remainingDistance = Math.max(0, totalDistance - distanceTraveled);
+  const remainingTime = Math.ceil(Math.max(0, totalTime - timeSpent));
+  const remainingDistance = Math.ceil(Math.max(0, totalDistance - distanceTraveled));
 
   return (
     <div
