@@ -57,7 +57,7 @@ export const Router = React.memo(function Router(props: RouterProps) {
   }, [props.isSourceFocused, props.isDestinationFocused]);
 
   useEffect(() => {
-    if (!props.routeDataCRP || props.routeDataCRP.length === 0) {
+    if (!props.routeDataCRP || (props.routeDataCRP?.length ?? 0) === 0) {
       setShowDirections(false);
       props.handleDirectionActive(false);
       props.handleSetNextTurnIndex(-1);
@@ -69,13 +69,13 @@ export const Router = React.memo(function Router(props: RouterProps) {
   ]);
 
   const safeActiveRoute =
-    props.routeDataCRP && props.activeRoute < props.routeDataCRP.length
+    props.routeDataCRP && props.activeRoute < (props.routeDataCRP?.length ?? 0)
       ? props.activeRoute
       : 0;
 
   return (
     <>
-      {props.routeDataCRP?.length! > 0 &&
+      {(props.routeDataCRP?.length ?? 0) > 0 &&
       !props.isSourceFocused &&
       !props.isDestinationFocused ? (
         <>
@@ -111,7 +111,7 @@ export const Router = React.memo(function Router(props: RouterProps) {
       ) : (
         <div
           className={`${
-            props.routeDataCRP?.length! > 0 &&
+            (props.routeDataCRP?.length ?? 0) > 0 &&
             !props.isSourceFocused &&
             !props.isDestinationFocused
               ? "hidden"
@@ -432,10 +432,12 @@ function showRouteResultMobile(
           <div className="bg-white/10 p-2 rounded-xl">
             <Image
               src={getTurnIcon(
-                props.routeDataCRP![activeRoute].driving_directions.length > 0
-                  ? props.routeDataCRP![activeRoute].driving_directions[
+                (props.routeDataCRP?.length ?? 0) > 0 &&
+                  (props.routeDataCRP?.[activeRoute]?.driving_directions?.length ??
+                    0) > 0
+                  ? props.routeDataCRP?.[activeRoute]?.driving_directions[
                       props.currentDirectionIndex
-                    ].turn_type
+                    ]?.turn_type ?? "CONTINUE_ONTO"
                   : "CONTINUE_ONTO",
                 "icons_white",
               )}
@@ -460,20 +462,25 @@ function showRouteResultMobile(
                 </span>
               </p>
               <p className="text-sm font-black text-white leading-tight text-right ml-4">
-                {props.routeDataCRP![activeRoute].driving_directions.length > 0
-                  ? props
-                      .routeDataCRP![
-                        activeRoute
-                      ].driving_directions[props.currentDirectionIndex].instruction.replace(props.routeDataCRP![activeRoute].driving_directions[props.currentDirectionIndex].street_name, "")
+                {(props.routeDataCRP?.[activeRoute]?.driving_directions?.length ?? 0) > 0
+                  ? props.routeDataCRP?.[activeRoute]?.driving_directions[
+                      props.currentDirectionIndex
+                    ]?.instruction
+                      ?.replace(
+                        props.routeDataCRP?.[activeRoute]?.driving_directions[
+                          props.currentDirectionIndex
+                        ]?.street_name ?? "",
+                        "",
+                      )
                       .trim()
                   : ""}
               </p>
             </div>
             <p className="text-sm font-bold text-blue-400 line-clamp-1">
-              {props.routeDataCRP![activeRoute].driving_directions.length > 0
-                ? props.routeDataCRP![activeRoute].driving_directions[
+              {(props.routeDataCRP?.[activeRoute]?.driving_directions?.length ?? 0) > 0
+                ? props.routeDataCRP?.[activeRoute]?.driving_directions[
                     props.currentDirectionIndex
-                  ].street_name
+                  ]?.street_name
                 : ""}
             </p>
           </div>
