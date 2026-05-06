@@ -805,11 +805,7 @@ export default function Home() {
             drivingDirections: usedRouteDirections,
           });
 
-          if (
-            directionsIndex !== lastDirIndex ||
-            (mapMatchStep.current > 1 && directionsIndex == 0)
-          ) {
-
+          if (directionsIndex !== lastDirIndex || mapMatchStep.current > 1) {
             updatedState.currentDirectionIndex = directionsIndex;
             lastDirIndex = directionsIndex;
             stateChanged = true;
