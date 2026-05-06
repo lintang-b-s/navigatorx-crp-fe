@@ -1,11 +1,11 @@
 ---
 name: navigatorx-fe-logic
-description: Complete logic of NavigatorX Frontend mapping, routing, online map matching, driving directions, rerouting, simulation, search, and UI features. Use when working on or debugging the frontend mapping logic.
+description: Comprehensive guide to the NavigatorX frontend architecture, including 60fps sync loops, WASM map-matching, MHT algorithms, and file-level logic explanations.
 ---
 
 # NavigatorX Frontend Mapping & Routing Logic
 
-This skill explains the core mapping, routing, online map matching, driving directions, dynamic rerouting logic, search, and simulation mode within the NavigatorX Frontend Next.js application, specifically focusing on `app/page.tsx`, `app/simulation/page.tsx`, `app/ui/map.tsx`, `app/ui/routing.tsx`, and associated libraries.
+This skill explains the core mapping, routing, online map matching, driving directions, dynamic rerouting logic, search, and simulation mode within the NavigatorX Frontend Next.js application.
 
 ## Objectives of the NextJS NavigatorX Map Project
 
@@ -14,17 +14,43 @@ The primary objectives of this project are:
 2. **Turn-by-Turn Navigation**: Provide real-time navigation features (like Google Maps, Apple Maps, Waze, etc.). When a user initiates navigation (by clicking the "Navigate" button on a selected route), the map delivers the next closest turn-by-turn instruction based on the specific road segment/edge the user is on (determined by online map matching). 
    - **Rerouting**: If the user deviates from the selected route while navigating, the map automatically reroutes, providing a new path in the same direction as the user's current trajectory.
    - **Dynamic Alternatives**: The map also intelligently provides alternative route suggestions on-the-fly when the user approaches major intersections or decision points.
+## Core Technical Architecture: The "Ref vs. State" Pattern
 
-## 1. Online Map Matching
+A critical architectural decision in NavigatorX is the separation of **High-Frequency Logic** from **UI State Management**.
 
+1.  **Mutable Refs (`useRef`)**: All performance-critical calculations (GPS map matching, 60fps car animations, distance-to-next-turn math) are handled using `useRef`. This allows the application to process data 60 times per second without triggering React's expensive re-render cycle.
+2.  **Reactive State (`useState`)**: React state is used only for elements that the user sees on screen (instruction text, distance numbers, map visibility). State updates are "throttled" by the natural speed of the browser's render cycle, while the underlying math remains frame-accurate in the background.
+
+## Detailed File Breakdown
+
+### Root Components
+- **`app/page.tsx`**: The main orchestrator. It manages the `navigator.geolocation` watch, handles the high-frequency `requestAnimationFrame` sync loop, and coordinates rerouting and alternative suggestions.
+- **`app/simulation/page.tsx`**: A developer sandbox that replays GPS traces to verify map matching and routing behavior.
+
+### Library Logic (`app/lib/`)
+- **`lib/routing.ts`**: Contains the "brain" for route-following.
+  - `isUserOffTheRoute`: Detects deviations from the path using Set-based lookup.
+  - `getCurrentUserDirectionIndex`: Maps the current road (EdgeID) to a specific turn instruction.
+  - `getDistanceFromUserToNextTurn`: Calculates Haversine distance to the junction.
+- **`lib/wasmMapmatch.ts`**: The bridge to the Go-compiled WebAssembly engine.
+  - Loads tiles based on S2 cells (Level 13).
+  - Handles the `InitializeMapMatchingGraph` and `OnlineMapMatch` WASM functions.
+- **`lib/util.ts`**: Geometry and formatting utilities (Haversine, Mercator projection).
+- **`lib/navigatorxApi.ts`**: The API client for CRP (Custom Routing Plan) engine.
+
+---
+
+## 1. Online Map Matching (WASM Engine)
+
+NavigatorX implements a high-performance WebAssembly engine following the **Multiple Hypothesis Technique (MHT)**.
 Online map matching aligns noisy raw GPS coordinates from the device to actual road segments (edges) on the map in real-time. NavigatorX implements a high-performance **WebAssembly (WASM)** engine that imitates the **client-side real-time map matching architecture** pioneered by [Lyft Engineering](https://eng.lyft.com/using-client-side-map-data-to-improve-real-time-positioning-a382585ac6e). 
-
-The logic specifically follows the **Multiple Hypothesis Technique (MHT)** and **Route Prediction** model described in:
-
-> [1] Taguchi, S., Koide, S. and Yoshimura, T. (2019) “Online Map Matching With Route Prediction,” IEEE Transactions on Intelligent Transportation Systems, 20(1), pp. 338–347. [Available at IEEE](https://doi.org/10.1109/TITS.2018.2812147).
 
 ### Core Mechanism: Multiple Hypothesis Technique (MHT)
 Unlike traditional HMM-based methods that introduce latency by waiting for future GPS points (Viterbi), NavigatorX uses MHT to provide **zero-latency matching**. It maintains a set of **weighted hypotheses (candidates)** for the current road segment.
+
+The logic specifically follows the **Multiple Hypothesis Technique (MHT)** and **Route Prediction** model described in:
+> [1] Taguchi, S., Koide, S. and Yoshimura, T. (2019) “Online Map Matching With Route Prediction,” IEEE Transactions on Intelligent Transportation Systems, 20(1), pp. 338–347. [Available at IEEE](https://doi.org/10.1109/TITS.2018.2812147).
+
 
 1.  **Hypothesis Maintenance**: The state is represented as a set of candidates $C = \{(c_i.e, c_i.w)\}$, where $e$ is an edge and $w$ is its posterior probability.
 2.  **Route Prediction (Virtual Future)**: The engine uses a probabilistic route prediction model to estimate the likelihood of reaching reachable road segments. This serves as a "virtual future," allowing the system to evaluate current candidates without waiting for subsequent GPS data.
@@ -32,6 +58,8 @@ Unlike traditional HMM-based methods that introduce latency by waiting for futur
     - **Prediction Step**: Enumerate reachable segments and calculate transition probability $p(r_k|r_{k-1})$ based on the route prediction model.
     - **Filtering Step**: Update weights by multiplying the predicted probability with the **Observation Probability** $p(g_k|r_k)$ (Gaussian distribution of GPS distance to road).
 4.  **Pruning & Integration**: To maintain efficiency, candidates with weights below a threshold are pruned, and multiple hypotheses leading to the same segment are integrated (summed).
+
+
 
 ### Implementation Details:
 - **Initialization**: Triggered when `routeStarted` is set to `true`. Initializes the WASM engine via `wasmMapMatcher.init()`. It loads `wasm_exec.js` and `online_map_matcher.wasm` with cache-busting query parameters.
@@ -57,6 +85,11 @@ Driving directions are fetched from the routing engine and displayed contextuall
 - **Current Direction Calculation**: In the sync loop of `page.tsx`, `getCurrentUserDirectionIndex` iterates through `driving_directions`. It checks which direction's `edge_ids` array contains the current `snappedEdgeID`.
 - **Distance to Turn**: Uses `getDistanceFromUserToNextTurn` (Haversine) from the current `matchedGpsLoc` to the current direction's `nextTurnPoint`.
 - **UI Rendering**: `MapComponent` filters and renders turn markers. Zoom-level-based scaling is applied to turn icons, rotating them based on `turn_bearing - userHeading`. `Router` component shows the step-by-step turn instructions.
+- **Sync Loop Tracking**: In `page.tsx`, the system constantly checks if the current `snappedEdgeID` exists in the current direction step's `edge_ids`.
+- **ETA Normalization**: To keep ETAs accurate during alternative route switches, the system uses:
+  - `currentTimeOffset`: Time already spent driving.
+  - `currentDistOffset`: Distance already traveled.
+  Total ETA = (Remaining Time from API) + `currentTimeOffset`.
 
 ## 3. Reroute Logic
 

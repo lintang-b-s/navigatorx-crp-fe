@@ -474,6 +474,7 @@ function showRouteEtaAndDistance(
   const timeSpent = props.timeSpent ?? 0;
   const distanceTraveled = props.distanceTraveled ?? 0;
 
+  // Calculate remaining time and distance by subtracting current progress from totals.
   const remainingTime = Math.ceil(Math.max(0, totalTime - timeSpent));
   const remainingDistance = Math.ceil(Math.max(0, totalDistance - distanceTraveled));
 
@@ -485,8 +486,9 @@ function showRouteEtaAndDistance(
     >
       {/* biar eta & distance ditengah */}
       <div></div>
+      
       <div className="flex flex-col space-y-2 items-center justify-center">
-        <p className="font-bold text-xl tracking-wide ">
+        <p className="font-bold text-xl tracking-wide">
           {nowTime ? new Date(
             nowTime.getTime() + remainingTime * 60000,
           ).toLocaleTimeString("en-US", {
@@ -496,20 +498,20 @@ function showRouteEtaAndDistance(
           }) : "--:--"}
         </p>
         <div className="flex flex-row space-x-2 items-center">
-          <p className="text-base ">
+          <p className="text-base">
             {formatTime(remainingTime)} menit
           </p>
           <FaCircle size={14} color="#dedfe0" />
-          <p className="text-base ">
+          <p className="text-base">
             {remainingDistance >= 1
               ? `${formatDistance(remainingDistance)} km`
               : `${formatDistance(remainingDistance * 1000)} m`}
           </p>
         </div>
       </div>
+
       <button
-        className="flex flex-row justify-center items-center  h-14 w-14  bg-[#dedfe0]
-       rounded-full"
+        className="flex flex-row justify-center items-center h-14 w-14 bg-[#dedfe0] rounded-full"
         onClick={() => {
           handleStartRoute(false);
         }}
@@ -728,10 +730,9 @@ function showRouteDirectionsComponent(
             );
           }}
         >
-          <AiOutlineThunderbolt size={18} color="white" />
+        <AiOutlineThunderbolt size={18} color="white" />
           <p>Navigate</p>
-          <FaLocationArrow size={20} color="white" />
-        </button>
+          <FaLocationArrow size={20} color="white" />        </button>
       </div>
 
       {routeDirections.map((direction, index) => (
@@ -739,7 +740,7 @@ function showRouteDirectionsComponent(
           key={`route-${index}`}
           className={`flex flex-row gap-2 items-center border-t-[1px] ${
             index == routeDirections!.length - 1 ? "border-b-[1px] mb-10" : ""
-          }  border-[#D3DAE0] cursor-pointer group py2 `}
+          }  border-[#D3DAE0] cursor-pointer group py-2 `}
           onClick={() => {
             handleSetNextTurnIndex(index);
           }}
@@ -749,8 +750,8 @@ function showRouteDirectionsComponent(
           ></div>
           <Image
             src={getTurnIcon(direction.turn_type, "icons")}
-            width={24}
-            height={24}
+            width={34}
+            height={34}
             alt={`turn-${index}`}
             key={`turn-${index}`}
           />

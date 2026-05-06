@@ -66,10 +66,29 @@ const normalizeBearing = (bearing: number) => {
 };
 
 export default function Home() {
+  // REFS: Used for high-frequency updates (60fps) to avoid React re-render lag.
+  // We perform math in refs, then sync to state at a controlled rate for the UI.
   const isReroutingRef = useRef(false);
   const routeDataRef = useRef<RouteCRPResponse[] | undefined>(undefined);
   const activeRouteRef = useRef(0);
   const snappedEdgeIDRef = useRef(-1);
+  const currentGpsLocRef = useRef<Coord | null>(null);
+  const currentHeadingRef = useRef<number>(0);
+  const lastMatchedPointRef = useRef<Coord | null>(null);
+  const startTimeRef = useRef<Date | null>(null);
+  const totalDistanceTraveledRef = useRef<number>(0);
+
+  const candidates = useRef<Candidate[]>([]);
+  const speedMeanK = useRef<number>(8.3333);
+  const speedStdK = useRef<number>(8.3333);
+  const lastBearing = useRef<number>(0.0);
+  const prevGps = useRef<Gps>(undefined);
+  const mapMatchStep = useRef<number>(1);
+  const deadReckoning = useRef<boolean>(false);
+  const isInitialReroutePerformed = useRef<boolean>(false);
+  const lastFetchedAlternativesStep = useRef<number>(-1);
+  const hasArrived = useRef(false);
+
   // real-time map matching states
   const { orientation, requestAccess, revokeAccess, error } =
     useDeviceOrientation();
@@ -94,7 +113,7 @@ export default function Home() {
 
   const { matchedGpsLoc, matchedHeading, distanceFromNextTurnPoint, currentDirectionIndex, timeSpent, distanceTraveled } = navigationState;
 
-  const [gpsHeading, setGpsHeading] = useState<number>(0); // bearing (user heading angle from North)
+
   const [rawGpsLoc, setRawGpsLoc] = useState<Coord>();
   const [geolocateTrigger, setGeolocateTrigger] = useState(0);
 
@@ -130,22 +149,6 @@ export default function Home() {
     longitude: -100,
     latitude: 40,
   });
-
-  const candidates = useRef<Candidate[]>([]);
-  const speedMeanK = useRef<number>(8.3333);
-  const speedStdK = useRef<number>(8.3333);
-  const lastBearing = useRef<number>(0.0);
-  const prevGps = useRef<Gps>(undefined);
-  const mapMatchStep = useRef<number>(1);
-  const deadReckoning = useRef<boolean>(false);
-  const isInitialReroutePerformed = useRef<boolean>(false);
-  const lastFetchedAlternativesStep = useRef<number>(-1);
-  const currentGpsLocRef = useRef<Coord | null>(null);
-  const currentHeadingRef = useRef<number>(0);
-  const hasArrived = useRef(false);
-  const startTimeRef = useRef<Date | null>(null);
-  const totalDistanceTraveledRef = useRef<number>(0);
-  const lastMatchedPointRef = useRef<Coord | null>(null);
 
   const parseCoordinates = useCallback((input: string) => {
     const coordRegex =
@@ -183,10 +186,6 @@ export default function Home() {
         toast.error("Geolocation is not supported by this browser.");
       }
 
-      const allowedOrientationPerm = await requestAccess();
-      if (!allowedOrientationPerm) {
-        toast.error("Orientation permission not granted");
-      }
 
       replace(`${pathname}`);
     };
@@ -411,15 +410,22 @@ export default function Home() {
     setNextTurnIndex(index);
   }, []);
 
+  /**
+   * Initializes or stops the navigation session.
+   * On start: Prepares the WASM map matcher and seeds the first road segment (candidate).
+   */
   const handleStartRoute = useCallback(async (start: boolean) => {
     if (start) {
       await wasmMapMatcher.init();
-      startTimeRef.current = null;
-      totalDistanceTraveledRef.current = 0;
+      startTimeRef.current = null; // Reset trip start time
+      totalDistanceTraveledRef.current = 0; // Reset odometer
       lastMatchedPointRef.current = null;
 
       const usedRoute = routeDataRef.current?.[activeRouteRef.current];
       const firstRouteEdgeID = usedRoute?.driving_directions[0]?.edge_ids[0];
+      
+      // We seed the map matcher with the first edge of the route to help it 
+      // "lock on" to the starting road immediately.
       if (firstRouteEdgeID) {
         mapMatchStep.current = 1;
         candidates.current = [{ edge_id: firstRouteEdgeID, weight: 1.0, length: 0 }];
@@ -428,6 +434,7 @@ export default function Home() {
         candidates.current = [];
       }
     } else {
+      // Clear navigation state on stop
       setNavigationState({
         matchedGpsLoc: undefined,
         matchedHeading: 0,
@@ -442,13 +449,7 @@ export default function Home() {
   }, []);
 
 
-  useEffect(() => {
-    if (orientation?.alpha != null) {
-      setGpsHeading(360.0 - orientation?.alpha!);
-    }
-  }, [orientation]);
-
- 
+  
 
   // route started useffect
   useEffect(() => {
@@ -584,11 +585,7 @@ export default function Home() {
           let deltaTime: number = 0;
           let speed = 0.0;
 
-          if (orientation?.alpha == null) {
-            // buat debugging di hp
-            setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
-          }
-
+          
           let distance = 1
           if (pos.coords.speed !== null && pos.coords.speed !== undefined) {
             speed = pos.coords.speed;
@@ -743,19 +740,26 @@ export default function Home() {
     let lastDirIndex = -1;
     let lastUpdateTimestamp = 0;
 
+    /**
+     * HIGH-FREQUENCY SYNC LOOP
+     * This loop runs at ~60fps using requestAnimationFrame. 
+     * It handles smooth car marker movement and calculates "Real-Time" distance/ETA 
+     * based on the latest Map-Matched GPS location.
+     */
     const sync = () => {
       if (currentGpsLocRef.current) {
         const curLat = currentGpsLocRef.current.lat;
         const curLon = currentGpsLocRef.current.lon;
         const curH = normalizeBearing(currentHeadingRef.current);
         
-        // 1. Calculate and update routing UI state (distance, direction)
         let updatedState: any = {};
         let stateChanged = false;
 
         const usedRoute = routeDataRef.current?.[activeRouteRef.current];
         if (usedRoute) {
           const usedRouteDirections = usedRoute.driving_directions;
+          
+          // 1. Identify which turn instruction the user is currently in.
           const directionsIndex = getCurrentUserDirectionIndex({
             snappedEdgeID: snappedEdgeIDRef.current,
             drivingDirections: usedRouteDirections,
@@ -767,7 +771,8 @@ export default function Home() {
             stateChanged = true;
           }
 
-        const newDist = getDistanceFromUserToNextTurn({
+          // 2. Calculate distance to the next turn point (the "X meters to turn" number).
+          const newDist = getDistanceFromUserToNextTurn({
             matchedGpsLoc: { lat: curLat, lon: curLon },
             nextTurnPoint: usedRouteDirections.length > 0
               ? usedRouteDirections[directionsIndex].turn_point
@@ -775,7 +780,7 @@ export default function Home() {
                   lat: destinationLoc?.osm_object.lat ?? 0,
                   lon: destinationLoc?.osm_object.lon ?? 0,
                 },
-          }) * 1000.0;
+          }) * 1000.0; // Convert KM to Meters
           
           const timeSpent = startTimeRef.current
             ? (new Date().getTime() - startTimeRef.current.getTime()) / 60000
@@ -864,24 +869,27 @@ export default function Home() {
     alternativeRoutesLineDataRef.current = alternativeRoutesLineData;
   }, [alternativeRoutesLineData]);
 
-  // re-routing logic useffect
+  /**
+   * RE-ROUTING & ALTERNATIVES EFFECT
+   * Watches for "Off-Route" scenarios or "Decision Points" to trigger API calls.
+   */
   useEffect(() => {
     const usedRoute = routeData?.[activeRoute];
 
-    // (Moved to sync loop for performance)
-
-    // Dynamic alternatives trigger logic
+    // DYNAMIC ALTERNATIVES: Triggered when approaching the end of a road segment.
     if (matchedGpsLoc && usedRoute && routeData && destinationLoc) {
       const directionsIndex = getCurrentUserDirectionIndex({
         snappedEdgeID: snappedEdgeID,
         drivingDirections: usedRoute.driving_directions,
       });
 
+      // If user is near the end of a step tagged as 'suggest_alternatives', fetch options.
       if (isNearEndOfSuggestAlternativesStep({
         snappedEdgeID: snappedEdgeID,
         drivingDirections: usedRoute.driving_directions,
         currentIndex: directionsIndex
       }) && directionsIndex !== lastFetchedAlternativesStep.current && !isReroutingRef.current) {
+        
         lastFetchedAlternativesStep.current = directionsIndex;
         isReroutingRef.current = true;
         ;(async () => {
@@ -894,14 +902,22 @@ export default function Home() {
               reroute: true,
               startEdgeId: snappedEdgeID,
             };
+            
+            // Proactive Refresh: Fetch new alternatives but keep the main route's progress.
             const altResponse = await fetchAlternativeRoutes(reqBody);
             const newAlternatives = altResponse.data.alternative_routes;
+
             if (newAlternatives.length > 0) {
+              // Normalize alternatives so their "Remaining Distance" works with our current trackers.
+              const currentDistOffset = totalDistanceTraveledRef.current;
+              const currentTimeOffset = (Date.now() - (startTimeRef.current?.getTime() ?? Date.now())) / 60000;
+
               newAlternatives.forEach((alt: any) => {
-                alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
+                alt.distance = parseFloat(((alt.distance / 1000) + currentDistOffset).toFixed(2));
+                alt.travel_time = alt.travel_time + currentTimeOffset;
               });
-              const mainRoute = routeData[0];
-              const combinedRoutes = [mainRoute, ...newAlternatives];
+              
+              const combinedRoutes = [usedRoute, ...newAlternatives];
               setRouteData(combinedRoutes);
               routeDataRef.current = combinedRoutes;
 
@@ -1033,6 +1049,10 @@ export default function Home() {
             // Reset active route to 0 after reroute
             setActiveRoute(0);
             activeRouteRef.current = 0;
+
+            // Reset trackers for correct ETA/Distance calculation on the new route
+            startTimeRef.current = new Date();
+            totalDistanceTraveledRef.current = 0;
           } catch (e: any) {
             toast.error(
               `Failed to fetch route (re-routing): ${e?.message ?? "Unknown error"}`,
@@ -1043,6 +1063,7 @@ export default function Home() {
         }
       })();
     }
+    
   }, [
     snappedEdgeID,
     routeData,
