@@ -546,7 +546,7 @@ export const MapComponent = React.memo(function MapComponent({
             type="line"
             source="bounding-box"
             paint={{
-              "line-color": "#2B7FFF",
+              "line-color": ACTIVE_ROUTE_COLOR,
               "line-width": 5,
             }}
           />

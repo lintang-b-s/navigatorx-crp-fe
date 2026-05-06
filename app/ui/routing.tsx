@@ -256,10 +256,10 @@ function showRouteResultMobile(
           <div className="flex flex-col py-2 flex-1 overflow-y-scroll">
             <div className="flex flex-row pr-3 items-center justify-between pb-2">
               <button
-                className={`flex  h-[20px] items-center rounded-md bg-purple-600 px-3 
+                className={`flex  h-[20px] items-center rounded-md bg-blue-600 px-3 
             text-sm font-medium text-white transition-colors
-             hover:bg-purple-400 focus-visible:outline 
-               focus-visible:outline-offset-2 focus-visible:outline-purple-500 active:bg-purple-600 
+             hover:bg-blue-400 focus-visible:outline 
+               focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                cursor-pointer aria-disabled:opacity-50  ml-2  py-3 `}
                 onClick={(e) => {
                   handleShowDirections(false);
@@ -335,10 +335,10 @@ function showRouteResultMobile(
             <div className="flex flex-row pr-3 items-center justify-between pb-2">
               <div className="flex flex-row gap-2 items-center">
                 <button
-                  className={`flex  h-[20px] items-center rounded-md bg-purple-600 px-3
+                  className={`flex  h-[20px] items-center rounded-md bg-blue-600 px-3
               text-sm font-medium text-white transition-colors
-               hover:bg-purple-400 focus-visible:outline 
-                 focus-visible:outline-offset-2 focus-visible:outline-purple-500 active:bg-purple-600 
+               hover:bg-blue-400 focus-visible:outline 
+                 focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                  cursor-pointer aria-disabled:opacity-50  ml-2   py-3 `}
                   onClick={(e) => {
                     props.handleSetRouteDataCRP([]);
@@ -703,10 +703,10 @@ function showRouteDirectionsComponent(
     <div className="flex flex-col  py-2 flex-1 overflow-y-scroll">
       <div className="flex flex-row gap-2 w-full ">
         <button
-          className={`flex ml-1 mt-2 h-[20px] items-center rounded-md bg-purple-600 px-3 
+          className={`flex ml-1 mt-2 h-[20px] items-center rounded-md bg-blue-600 px-3 
                   text-sm font-medium text-white transition-colors
-                   hover:bg-purple-400 focus-visible:outline 
-                     focus-visible:outline-offset-2 focus-visible:outline-purple-500 active:bg-purple-600 
+                   hover:bg-blue-400 focus-visible:outline 
+                     focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                      cursor-pointer aria-disabled:opacity-50 py-2`}
           onClick={(e) => {
             handleShowDirections(false);
@@ -720,10 +720,10 @@ function showRouteDirectionsComponent(
         </p>
 
         <button
-          className={`flex mt-2 h-[20px] items-center rounded-md bg-purple-600 px-3 
+          className={`flex mt-2 h-[20px] items-center rounded-md bg-blue-600 px-3 
                   text-sm font-medium text-white transition-colors
-                   hover:bg-purple-400 focus-visible:outline 
-                     focus-visible:outline-offset-2 focus-visible:outline-purple-500 active:bg-purple-600 
+                   hover:bg-blue-400 focus-visible:outline 
+                     focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                      cursor-pointer aria-disabled:opacity-50 ml-auto mr-2 py-3 `}
           onClick={(e) => {
             toast.error(
