@@ -10,11 +10,7 @@ import { useEffect, useState } from "react";
 import { RouterProps } from "../types/definition";
 import { CiGps } from "react-icons/ci";
 import { getArrivalTime, haversineDistance } from "@/app/lib/util";
-import {
-  CumulativeDirection,
-  RouteCRPResponse,
-  RouteResponse,
-} from "../lib/navigatorxApi";
+import { CumulativeDirection, RouteCRPResponse } from "../lib/navigatorxApi";
 import { IoIosArrowBack } from "react-icons/io";
 import Image from "next/image";
 import { FaLocationArrow } from "react-icons/fa6";
@@ -272,7 +268,8 @@ function showRouteResultMobile(
               </button>
               <button
                 className={`${
-                  props.ignoreDistanceCheck || haversineDistance(
+                  props.ignoreDistanceCheck ||
+                  haversineDistance(
                     props.sourceLoc?.osm_object.lat!,
                     props.sourceLoc?.osm_object.lon!,
                     props.userLoc.latitude,
@@ -354,7 +351,8 @@ function showRouteResultMobile(
               </div>
               <button
                 className={`${
-                  props.ignoreDistanceCheck || haversineDistance(
+                  props.ignoreDistanceCheck ||
+                  haversineDistance(
                     props.sourceLoc?.osm_object.lat!,
                     props.sourceLoc?.osm_object.lon!,
                     props.userLoc.latitude,
@@ -401,7 +399,10 @@ function showRouteResultMobile(
                         {formatTime(route.travel_time)} Menit
                       </span>
                       <span>&nbsp;&nbsp;&nbsp;</span>
-                      Tiba pada {nowTime ? getArrivalTime(route.travel_time, nowTime) : "--:--"}{" "}
+                      Tiba pada{" "}
+                      {nowTime
+                        ? getArrivalTime(route.travel_time, nowTime)
+                        : "--:--"}{" "}
                     </p>
                     <p className="text-sm text-[#4C4C4C] ">
                       {formatDistance(route.distance)} KM
@@ -431,29 +432,49 @@ function showRouteResultMobile(
           <div className="bg-white/10 p-2 rounded-xl">
             <Image
               src={getTurnIcon(
-              props.routeDataCRP![activeRoute].driving_directions.length > 0   ? props.routeDataCRP![activeRoute].driving_directions[props.currentDirectionIndex].turn_type   : "CONTINUE_ONTO",
-                "icons_white",)}
+                props.routeDataCRP![activeRoute].driving_directions.length > 0
+                  ? props.routeDataCRP![activeRoute].driving_directions[
+                      props.currentDirectionIndex
+                    ].turn_type
+                  : "CONTINUE_ONTO",
+                "icons_white",
+              )}
               width={42}
               height={42}
               alt={`turn-start-route`}
               key={`turn-start-route`}
             />
           </div>
-          <div className="flex flex-col">
-            <p className="text-xl font-black text-white leading-tight">
-              {props.distanceFromNextTurnPoint >= 1000 
-                ? new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(props.distanceFromNextTurnPoint / 1000)
-                : new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(props.distanceFromNextTurnPoint)} 
-              <span className="text-sm font-normal opacity-70 ml-1">
-                {props.distanceFromNextTurnPoint >= 1000 ? "km" : "m"}
-              </span>
-            </p>
+          <div className="flex flex-col flex-1">
+            <div className="flex justify-between items-baseline w-full">
+              <p className="text-xl font-black text-white leading-tight">
+                {props.distanceFromNextTurnPoint >= 1000
+                  ? new Intl.NumberFormat("id-ID", {
+                      maximumFractionDigits: 1,
+                    }).format(props.distanceFromNextTurnPoint / 1000)
+                  : new Intl.NumberFormat("id-ID", {
+                      maximumFractionDigits: 0,
+                    }).format(props.distanceFromNextTurnPoint)}
+                <span className="text-sm font-normal opacity-70 ml-1">
+                  {props.distanceFromNextTurnPoint >= 1000 ? "km" : "m"}
+                </span>
+              </p>
+              <p className="text-sm font-black text-white leading-tight text-right ml-4">
+                {props.routeDataCRP![activeRoute].driving_directions.length > 0
+                  ? props
+                      .routeDataCRP![
+                        activeRoute
+                      ].driving_directions[props.currentDirectionIndex].instruction.replace(props.routeDataCRP![activeRoute].driving_directions[props.currentDirectionIndex].street_name, "")
+                      .trim()
+                  : ""}
+              </p>
+            </div>
             <p className="text-sm font-bold text-blue-400 line-clamp-1">
-              {
-                props.routeDataCRP![activeRoute].driving_directions.length> 0 ?  props.routeDataCRP![activeRoute].driving_directions[
-                  props.currentDirectionIndex
-                ].street_name :""
-              }
+              {props.routeDataCRP![activeRoute].driving_directions.length > 0
+                ? props.routeDataCRP![activeRoute].driving_directions[
+                    props.currentDirectionIndex
+                  ].street_name
+                : ""}
             </p>
           </div>
         </div>
@@ -476,7 +497,9 @@ function showRouteEtaAndDistance(
 
   // Calculate remaining time and distance by subtracting current progress from totals.
   const remainingTime = Math.ceil(Math.max(0, totalTime - timeSpent));
-  const remainingDistance = Math.ceil(Math.max(0, totalDistance - distanceTraveled));
+  const remainingDistance = Math.ceil(
+    Math.max(0, totalDistance - distanceTraveled),
+  );
 
   return (
     <div
@@ -486,21 +509,21 @@ function showRouteEtaAndDistance(
     >
       {/* biar eta & distance ditengah */}
       <div></div>
-      
+
       <div className="flex flex-col space-y-2 items-center justify-center">
         <p className="font-bold text-xl tracking-wide">
-          {nowTime ? new Date(
-            nowTime.getTime() + remainingTime * 60000,
-          ).toLocaleTimeString("en-US", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          }) : "--:--"}
+          {nowTime
+            ? new Date(
+                nowTime.getTime() + remainingTime * 60000,
+              ).toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              })
+            : "--:--"}
         </p>
         <div className="flex flex-row space-x-2 items-center">
-          <p className="text-base">
-            {formatTime(remainingTime)} menit
-          </p>
+          <p className="text-base">{formatTime(remainingTime)} menit</p>
           <FaCircle size={14} color="#dedfe0" />
           <p className="text-base">
             {remainingDistance >= 1
@@ -634,9 +657,14 @@ function showRouteResult(
                       {formatTime(route.travel_time)} Menit
                     </span>
                     <span>&nbsp;&nbsp;&nbsp;</span>
-                    Tiba pada {nowTime ? getArrivalTime(route.travel_time, nowTime) : "--:--"}{" "}
+                    Tiba pada{" "}
+                    {nowTime
+                      ? getArrivalTime(route.travel_time, nowTime)
+                      : "--:--"}{" "}
                   </p>
-                  <p className="text-sm text-[#4C4C4C] ">{formatDistance(route.distance)} KM</p>
+                  <p className="text-sm text-[#4C4C4C] ">
+                    {formatDistance(route.distance)} KM
+                  </p>
                 </div>
 
                 <button
@@ -730,9 +758,10 @@ function showRouteDirectionsComponent(
             );
           }}
         >
-        <AiOutlineThunderbolt size={18} color="white" />
+          <AiOutlineThunderbolt size={18} color="white" />
           <p>Navigate</p>
-          <FaLocationArrow size={20} color="white" />        </button>
+          <FaLocationArrow size={20} color="white" />{" "}
+        </button>
       </div>
 
       {routeDirections.map((direction, index) => (
