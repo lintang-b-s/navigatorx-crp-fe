@@ -805,17 +805,24 @@ export default function Home() {
             drivingDirections: usedRouteDirections,
           });
 
+          // When rerouting, we often want to skip the initial "Head [Direction]" instruction at index 0
+          // and show the first real turn maneuver instead.
+          let targetIndex = directionsIndex;
+          if (mapMatchStep.current > 1 && targetIndex === 0 && usedRouteDirections.length > 1) {
+            targetIndex = 1;
+          }
+
           if (directionsIndex !== lastDirIndex || mapMatchStep.current > 1) {
-            updatedState.currentDirectionIndex = directionsIndex;
+            updatedState.currentDirectionIndex = targetIndex;
             lastDirIndex = directionsIndex;
             stateChanged = true;
           }
 
           // 2. Calculate distance to the next turn point (the "X meters to turn" number).
           const nextTurnPoint =
-            directionsIndex >= 0 &&
-            usedRouteDirections[directionsIndex]?.turn_point
-              ? usedRouteDirections[directionsIndex].turn_point
+            targetIndex >= 0 &&
+            usedRouteDirections[targetIndex]?.turn_point
+              ? usedRouteDirections[targetIndex].turn_point
               : {
                   lat: destinationLoc?.osm_object.lat ?? 0,
                   lon: destinationLoc?.osm_object.lon ?? 0,
