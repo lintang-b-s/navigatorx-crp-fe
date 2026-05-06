@@ -416,6 +416,16 @@ export default function Home() {
       startTimeRef.current = null;
       totalDistanceTraveledRef.current = 0;
       lastMatchedPointRef.current = null;
+
+      const usedRoute = routeDataRef.current?.[activeRouteRef.current];
+      const firstRouteEdgeID = usedRoute?.driving_directions[0]?.edge_ids[0];
+      if (firstRouteEdgeID) {
+        mapMatchStep.current = 1;
+        candidates.current = [{ edge_id: firstRouteEdgeID, weight: 1.0, length: 0 }];
+      } else {
+        mapMatchStep.current = 1;
+        candidates.current = [];
+      }
     } else {
       setNavigationState({
         matchedGpsLoc: undefined,
