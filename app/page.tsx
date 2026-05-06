@@ -39,11 +39,12 @@ import {
   LOST_GPS_THRESHOLD,
   UPDATE_NAVIGATION_STATE_THRESHOLD_MS,
   MIN_ANIMATION_DURATION,
-  MAX_ANIMATION_DURATION
+  MAX_ANIMATION_DURATION,
+  USER_HAS_ARRIVED_DESTINATION_DISTANCE,
 } from "@/app/lib/constants";
 import gsap from "gsap";
 import { wasmMapMatcher } from "./lib/wasmMapmatch";
-import { FaMicrochip } from "react-icons/fa";
+
 
 
 const MapComponent = dynamic(
@@ -79,17 +80,22 @@ export default function Home() {
     matchedHeading: number;
     distanceFromNextTurnPoint: number;
     currentDirectionIndex: number;
+    timeSpent: number;
+    distanceTraveled: number;
   }>({
     matchedGpsLoc: undefined,
     matchedHeading: 0,
     distanceFromNextTurnPoint: 0,
     currentDirectionIndex: 0,
+    timeSpent: 0,
+    distanceTraveled: 0,
   });
 
-  const { matchedGpsLoc, matchedHeading, distanceFromNextTurnPoint, currentDirectionIndex } = navigationState;
+  const { matchedGpsLoc, matchedHeading, distanceFromNextTurnPoint, currentDirectionIndex, timeSpent, distanceTraveled } = navigationState;
 
   const [gpsHeading, setGpsHeading] = useState<number>(0); // bearing (user heading angle from North)
   const [rawGpsLoc, setRawGpsLoc] = useState<Coord>();
+  const [geolocateTrigger, setGeolocateTrigger] = useState(0);
 
   // search states
   const searchParams = useSearchParams();
@@ -136,6 +142,9 @@ export default function Home() {
   const currentGpsLocRef = useRef<Coord | null>(null);
   const currentHeadingRef = useRef<number>(0);
   const hasArrived = useRef(false);
+  const startTimeRef = useRef<Date | null>(null);
+  const totalDistanceTraveledRef = useRef<number>(0);
+  const lastMatchedPointRef = useRef<Coord | null>(null);
 
   const parseCoordinates = useCallback((input: string) => {
     const coordRegex =
@@ -263,7 +272,9 @@ export default function Home() {
         matchedGpsLoc: undefined,
         matchedHeading: 0,
         distanceFromNextTurnPoint: 0,
-        currentDirectionIndex: 1,
+        currentDirectionIndex: 0,
+        timeSpent: 0,
+        distanceTraveled: 0,
       });
       lastFetchedAlternativesStep.current = -1;
       const reqBody = {
@@ -350,6 +361,7 @@ export default function Home() {
     e: MouseEvent<HTMLButtonElement, MouseEvent>,
     isSource: boolean,
   ) => {
+    setGeolocateTrigger((prev) => prev + 1);
     try {
       const resp = await fetchReverseGeocoding({
         lat: userLoc.latitude,
@@ -401,6 +413,18 @@ export default function Home() {
   const handleStartRoute = useCallback(async (start: boolean) => {
     if (start) {
       await wasmMapMatcher.init();
+      startTimeRef.current = null;
+      totalDistanceTraveledRef.current = 0;
+      lastMatchedPointRef.current = null;
+    } else {
+      setNavigationState({
+        matchedGpsLoc: undefined,
+        matchedHeading: 0,
+        distanceFromNextTurnPoint: 0,
+        currentDirectionIndex: 0,
+        timeSpent: 0,
+        distanceTraveled: 0,
+      });
     }
     hasArrived.current = false;
     setRouteStarted(start);
@@ -469,6 +493,21 @@ export default function Home() {
           
           const targetHeading = normalizeBearing(resp.data.edge_initial_bearing);
           const matched = resp.data.matched_gps_point.matched_coord;
+
+          // Track time and distance spent
+          if (!startTimeRef.current) {
+            startTimeRef.current = new Date();
+            lastMatchedPointRef.current = { lat: matched.lat, lon: matched.lon };
+          } else if (lastMatchedPointRef.current) {
+            const dist = haversineDistance(
+              lastMatchedPointRef.current.lat,
+              lastMatchedPointRef.current.lon,
+              matched.lat,
+              matched.lon
+            );
+            totalDistanceTraveledRef.current += dist;
+            lastMatchedPointRef.current = { lat: matched.lat, lon: matched.lon };
+          }
 
           if (!currentGpsLocRef.current) {
             currentGpsLocRef.current = { lat: matched.lat, lon: matched.lon };
@@ -539,7 +578,7 @@ export default function Home() {
             setGpsHeading(pos.coords.heading ? pos.coords.heading : 0);
           }
 
-          let distance =1
+          let distance = 1
           if (pos.coords.speed !== null && pos.coords.speed !== undefined) {
             speed = pos.coords.speed;
           } else if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
@@ -727,11 +766,19 @@ export default function Home() {
                 },
           }) * 1000.0;
           
+          const timeSpent = startTimeRef.current
+            ? (new Date().getTime() - startTimeRef.current.getTime()) / 60000
+            : 0;
+
           if (Math.abs(newDist - lastDist) > 1) {
             updatedState.distanceFromNextTurnPoint = newDist;
             lastDist = newDist;
             stateChanged = true;
           }
+
+          updatedState.timeSpent = timeSpent;
+          updatedState.distanceTraveled = totalDistanceTraveledRef.current;
+          stateChanged = true;
 
           // Arrival check
           if (destinationLoc && !hasArrived.current) {
@@ -743,13 +790,32 @@ export default function Home() {
                 destinationLoc.osm_object.lon,
               ) * 1000;
 
-            if (distToDest < 15) {
+            if (distToDest < USER_HAS_ARRIVED_DESTINATION_DISTANCE) {
               toast.success("You have arrived at your destination!", {
-                duration: 5000,
+                duration: 3000,
                 icon: "🏁",
               });
               hasArrived.current = true;
               setRouteStarted(false);
+              setRouteData(undefined);
+              setPolylineData(undefined);
+              setSourceLoc(undefined);
+              setDestinationLoc(undefined);
+              setAlternativeRoutesLineData([]);
+              setIsDirectionActive(false);
+              setActiveRoute(0);
+              setNextTurnIndex(-1);
+              setSearchResults([]);
+              setShowResult(false);
+              replace(`${pathname}`);
+              setNavigationState({
+                matchedGpsLoc: undefined,
+                matchedHeading: 0,
+                distanceFromNextTurnPoint: 0,
+                currentDirectionIndex: 0,
+                timeSpent: 0,
+                distanceTraveled: 0,
+              });
             }
           }
         }
@@ -1010,6 +1076,7 @@ export default function Home() {
         currentHeadingRef={currentHeadingRef}
         onMapClick={onMapClick}
         rawGpsLoc={rawGpsLoc}
+        triggerGeolocate={geolocateTrigger}
       />
       <Router
         sourceSearchActive={handleFocusSourceSearch}
@@ -1028,6 +1095,8 @@ export default function Home() {
         routeStarted={routeStarted}
         distanceFromNextTurnPoint={distanceFromNextTurnPoint}
         currentDirectionIndex={currentDirectionIndex}
+        timeSpent={timeSpent}
+        distanceTraveled={distanceTraveled}
         sourceLoc={sourceLoc}
         destinationLoc={destinationLoc}
         userLoc={userLoc}

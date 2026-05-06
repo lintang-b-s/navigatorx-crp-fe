@@ -10,6 +10,7 @@ import {
   Layer,
   NavigationControl,
   Popup,
+  AttributionControl,
 } from "@vis.gl/react-maplibre";
 // @ts-ignore
 import "maplibre-gl/dist/maplibre-gl.css"; // See notes below
@@ -63,6 +64,7 @@ export const MapComponent = React.memo(function MapComponent({
   isSimulation,
   currentGpsLocRef,
   currentHeadingRef,
+  triggerGeolocate,
 }: MapComponentProps) {
   const [contextMenuCoord, setContextMenuCoord] = useState<{
     lng: number;
@@ -85,6 +87,14 @@ export const MapComponent = React.memo(function MapComponent({
     bearing: 0,
     pitch: 0,
   });
+
+  const geolocateControlRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (triggerGeolocate && geolocateControlRef.current) {
+      geolocateControlRef.current.trigger();
+    }
+  }, [triggerGeolocate]);
 
   useEffect(() => {
     const getBoundingBox = async () => {
@@ -248,6 +258,7 @@ export const MapComponent = React.memo(function MapComponent({
         setViewState(evt.viewState);
       }}
       mapStyle="https://tiles.openfreemap.org/styles/liberty"
+      attributionControl={false}
       onContextMenu={(evt) => {
         evt.preventDefault();
         setContextMenuCoord({ lng: evt.lngLat.lng, lat: evt.lngLat.lat });
@@ -265,6 +276,7 @@ export const MapComponent = React.memo(function MapComponent({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      <AttributionControl compact={true} />
       {gpsWindowGeoJSON && (
         <Source id="gps-window-source" type="geojson" data={gpsWindowGeoJSON}>
           <Layer
@@ -309,6 +321,7 @@ export const MapComponent = React.memo(function MapComponent({
       )}
 
       <GeolocateControl
+        ref={geolocateControlRef}
         position="bottom-right"
         style={routeStarted ? { marginBottom: "50px" } : {}}
         positionOptions={{ enableHighAccuracy: true }}

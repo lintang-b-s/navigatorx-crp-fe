@@ -40,6 +40,8 @@ export type RouterProps = {
   onSelectSource: (place: Place) => void;
   onSelectDestination: (place: Place) => void;
   ignoreDistanceCheck?: boolean;
+  timeSpent?: number;
+  distanceTraveled?: number;
 };
 
 export type SearchSelectorProps = {
@@ -66,6 +68,7 @@ export type MapComponentProps = {
   isSimulation?: boolean;
   currentGpsLocRef?: React.RefObject<Coord | null>;
   currentHeadingRef?: React.RefObject<number>;
+  triggerGeolocate?: number;
 };
 
 export type LineData = {

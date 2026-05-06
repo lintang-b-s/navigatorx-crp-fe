@@ -120,7 +120,7 @@ export const Router = React.memo(function Router(props: RouterProps) {
             !props.isDestinationFocused
               ? "hidden"
               : "block"
-          } flex flex-col h-[180px] w-[94vw] sm:h-[200px] sm:w-[460px]  
+          } flex flex-col h-[180px] w-[94vw] sm:h-[200px] sm:w-[445px]  
         absolute top-4 left-1/2 -translate-x-1/2 sm:left-4 sm:translate-x-0 md:left-10 bg-white
         rounded-2xl overflow-hidden shadow-2xl z-10 `}
         >
@@ -472,19 +472,26 @@ function showRouteEtaAndDistance(
   handleStartRoute: (show: boolean) => void,
   nowTime: Date | null,
 ) {
+  const totalTime = props.routeDataCRP?.[activeRoute]?.travel_time ?? 0;
+  const totalDistance = props.routeDataCRP?.[activeRoute]?.distance ?? 0;
+  const timeSpent = props.timeSpent ?? 0;
+  const distanceTraveled = props.distanceTraveled ?? 0;
+
+  const remainingTime = Math.max(0, totalTime - timeSpent);
+  const remainingDistance = Math.max(0, totalDistance - distanceTraveled);
+
   return (
     <div
       className={`${
         routeStarted ? "flex" : "hidden"
-      } z-10 absolute bottom-0 flex-row h-[100px] w-full sm:w-[440px] sm:left-0 sm:rounded-tr-2xl bg-white items-center justify-between px-6 shadow-2xl`}
+      } z-10 absolute bottom-0 flex-row h-[100px] w-full sm:w-[400px] sm:left-0 sm:rounded-tr-2xl bg-white items-center justify-between px-6 shadow-2xl`}
     >
       {/* biar eta & distance ditengah */}
       <div></div>
       <div className="flex flex-col space-y-2 items-center justify-center">
         <p className="font-bold text-xl tracking-wide ">
           {nowTime ? new Date(
-            nowTime.getTime() +
-              props.routeDataCRP![activeRoute].travel_time * 60000,
+            nowTime.getTime() + remainingTime * 60000,
           ).toLocaleTimeString("en-US", {
             hour: "2-digit",
             minute: "2-digit",
@@ -493,11 +500,13 @@ function showRouteEtaAndDistance(
         </p>
         <div className="flex flex-row space-x-2 items-center">
           <p className="text-base ">
-            {formatTime(props.routeDataCRP![activeRoute].travel_time)} menit
+            {formatTime(remainingTime)} menit
           </p>
           <FaCircle size={14} color="#dedfe0" />
           <p className="text-base ">
-            {formatDistance(props.routeDataCRP![activeRoute].distance)} km
+            {remainingDistance >= 1
+              ? `${formatDistance(remainingDistance)} km`
+              : `${formatDistance(remainingDistance * 1000)} m`}
           </p>
         </div>
       </div>
@@ -526,7 +535,7 @@ function showRouteResult(
 ) {
   return (
     <div
-      className={`hidden sm:flex sm:flex-col sm:h-full sm:w-[440px] absolute top-0 left-0 bg-white shadow-2xl z-10 overflow-y-auto`}
+      className={`hidden sm:flex sm:flex-col sm:h-full sm:w-[430px] absolute top-0 left-0 bg-white shadow-2xl z-10 overflow-y-auto`}
     >
       <div className="flex  px-4 flex-col items-center py-2">
         <h3 className="text-center text-lg font-bold text-[#202124] tracking-wide">
