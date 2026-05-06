@@ -216,9 +216,7 @@ function showRouteResultMobile(
   handleSetNextTurnIndex: (index: number) => void,
   nowTime: Date | null,
 ) {
-  const routeDirections = props.routeDataCRP![
-    activeRoute
-  ].driving_directions.reduce<CumulativeDirection[]>(
+  const routeDirections = props.routeDataCRP?.[activeRoute]?.driving_directions?.reduce<CumulativeDirection[]>(
     (acc, currentDirection) => {
       const lastDirection = acc[acc.length - 1];
       const cumulativeEta = lastDirection
@@ -291,11 +289,11 @@ function showRouteResultMobile(
                 Navigate{" "}
               </button>
             </div>
-            {routeDirections.map((direction, index) => (
+            {(routeDirections ?? []).map((direction, index) => (
               <div
                 key={`route-${index}`}
                 className={`flex flex-row gap-2 items-center border-t-[1px] ${
-                  index == routeDirections!.length - 1
+                  index == (routeDirections?.length ?? 0) - 1
                     ? "border-b-[1px] mb-10"
                     : ""
                 }  border-[#D3DAE0] cursor-pointer group py-2 `}
@@ -640,12 +638,11 @@ function showRouteResult(
             Rute
           </p>
 
-          {props.routeDataCRP &&
-            props.routeDataCRP.map((route, index) => (
+            {(props.routeDataCRP ?? []).map((route, index) => (
               <div
                 key={`route-${index}`}
                 className={`flex flex-row items-center border-t-[1px] ${
-                  index == props.routeDataCRP!.length - 1
+                  index == (props.routeDataCRP?.length ?? 0) - 1
                     ? "border-b-[1px]"
                     : ""
                 }  border-[#D3DAE0] cursor-pointer group `}
@@ -691,8 +688,8 @@ function showRouteResult(
             ))}
         </div>
       ) : (
-        showRouteDirectionsComponent(
-          props.routeDataCRP![activeRoute],
+        props.routeDataCRP?.[activeRoute] && showRouteDirectionsComponent(
+          props.routeDataCRP[activeRoute],
           showDirections,
           handleShowDirections,
           props.handleDirectionActive,

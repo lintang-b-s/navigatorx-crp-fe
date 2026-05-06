@@ -431,8 +431,8 @@ export default function SimulationPage() {
 
               await new Promise<void>((resolve) => {
                 const animationData = {
-                  lat: currentGpsLocRef.current!.lat,
-                  lon: currentGpsLocRef.current!.lon,
+                  lat: currentGpsLocRef.current?.lat ?? 0,
+                  lon: currentGpsLocRef.current?.lon ?? 0,
                   heading: currentHeadingRef.current
                 };
 
@@ -669,7 +669,7 @@ export default function SimulationPage() {
     setIsRunning(false);
 
     if (writeToLog && logResultsRef.current.length > 0) {
-      const content = logResultsRef.current
+      const content = (logResultsRef.current ?? [])
         .map((res) => `${res.edge_id},${res.lat},${res.lon}`)
         .join("\n");
        
@@ -727,10 +727,12 @@ export default function SimulationPage() {
             stateChanged = true;
           }
 
-          const dToTurn = getDistanceFromUserToNextTurn({
-            matchedGpsLoc: { lat: curLat, lon: curLon },
-            nextTurnPoint: usedRouteDirections[directionsIndex].turn_point,
-          }) * 1000.0;
+          const dToTurn = (directionsIndex >= 0 && usedRouteDirections[directionsIndex]?.turn_point)
+            ? getDistanceFromUserToNextTurn({
+                matchedGpsLoc: { lat: curLat, lon: curLon },
+                nextTurnPoint: usedRouteDirections[directionsIndex].turn_point,
+              }) * 1000.0
+            : 0;
           
           if (Math.abs(dToTurn - lastDistToTurn) > 1) {
             updatedState.distanceFromNextTurnPoint = dToTurn;

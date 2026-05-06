@@ -422,7 +422,7 @@ export default function Home() {
       lastMatchedPointRef.current = null;
 
       const usedRoute = routeDataRef.current?.[activeRouteRef.current];
-      const firstRouteEdgeID = usedRoute?.driving_directions[0]?.edge_ids[0];
+      const firstRouteEdgeID = usedRoute?.driving_directions?.[0]?.edge_ids?.[0];
       
       // We seed the map matcher with the first edge of the route to help it 
       // "lock on" to the starting road immediately.
@@ -526,7 +526,7 @@ export default function Home() {
             currentHeadingRef.current = targetHeading;
             setNavigationState(prev => ({
               ...prev,
-              matchedGpsLoc: { ...currentGpsLocRef.current! },
+              matchedGpsLoc: currentGpsLocRef.current ? { ...currentGpsLocRef.current } : undefined,
               matchedHeading: targetHeading,
             }));
           } else {
@@ -596,8 +596,8 @@ export default function Home() {
               1000.0;
              distance =
               haversineDistance(
-                prevGps.current?.lat!,
-                prevGps.current?.lon!,
+                prevGps.current?.lat ?? 0,
+                prevGps.current?.lon ?? 0,
                 pos.coords.latitude,
                 pos.coords.longitude,
               ) * 1000; //meter
@@ -772,14 +772,16 @@ export default function Home() {
           }
 
           // 2. Calculate distance to the next turn point (the "X meters to turn" number).
+          const nextTurnPoint = (directionsIndex >= 0 && usedRouteDirections[directionsIndex]?.turn_point)
+            ? usedRouteDirections[directionsIndex].turn_point
+            : {
+                lat: destinationLoc?.osm_object.lat ?? 0,
+                lon: destinationLoc?.osm_object.lon ?? 0,
+              };
+
           const newDist = getDistanceFromUserToNextTurn({
             matchedGpsLoc: { lat: curLat, lon: curLon },
-            nextTurnPoint: usedRouteDirections.length > 0
-              ? usedRouteDirections[directionsIndex].turn_point
-              : {
-                  lat: destinationLoc?.osm_object.lat ?? 0,
-                  lon: destinationLoc?.osm_object.lon ?? 0,
-                },
+            nextTurnPoint,
           }) * 1000.0; // Convert KM to Meters
           
           const timeSpent = startTimeRef.current
