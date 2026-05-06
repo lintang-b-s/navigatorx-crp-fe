@@ -2,7 +2,15 @@
 import dynamic from "next/dynamic";
 import { Router } from "@/app/ui/routing";
 import { SearchResults } from "./ui/searchResult";
-import { MouseEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  MouseEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { fetchReverseGeocoding, fetchSearch, Place } from "@/app/lib/searchApi";
 import toast from "react-hot-toast";
@@ -15,13 +23,8 @@ import {
 } from "./lib/navigatorxApi";
 import polyline from "@mapbox/polyline";
 import { LineData } from "./types/definition";
-import {
-  Candidate,
-  Coord,
-  Gps,
-  MapMatchRequest,
-} from "./lib/mapmatchApi";
-import { haversineDistance,  mercatorDistance } from "./lib/util";
+import { Candidate, Coord, Gps, MapMatchRequest } from "./lib/mapmatchApi";
+import { haversineDistance, mercatorDistance } from "./lib/util";
 import {
   getCurrentUserDirectionIndex,
   getDistanceFromUserToNextTurn,
@@ -29,8 +32,8 @@ import {
   isNearEndOfSuggestAlternativesStep,
 } from "./lib/routing";
 import { useDeviceOrientation } from "./hook";
-import { 
-  THROTTLE_DISTANCE_THRESHOLD, 
+import {
+  THROTTLE_DISTANCE_THRESHOLD,
   INVALID_LAT,
   INVALID_LON,
   MIN_SPEED_THRESHOLD,
@@ -46,20 +49,26 @@ import {
 import gsap from "gsap";
 import { wasmMapMatcher } from "./lib/wasmMapmatch";
 
-
-
 const MapComponent = dynamic(
   () => import("@/app/ui/map").then((mod) => mod.MapComponent),
   {
     ssr: false,
     loading: () => (
-      <div style={{ width: "100vw", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f0f0" }}>
+      <div
+        style={{
+          width: "100vw",
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#f0f0f0",
+        }}
+      >
         <p>Loading map…</p>
       </div>
     ),
   },
 );
-
 
 const normalizeBearing = (bearing: number) => {
   return ((bearing % 360) + 360) % 360;
@@ -111,8 +120,14 @@ export default function Home() {
     distanceTraveled: 0,
   });
 
-  const { matchedGpsLoc, matchedHeading, distanceFromNextTurnPoint, currentDirectionIndex, timeSpent, distanceTraveled } = navigationState;
-
+  const {
+    matchedGpsLoc,
+    matchedHeading,
+    distanceFromNextTurnPoint,
+    currentDirectionIndex,
+    timeSpent,
+    distanceTraveled,
+  } = navigationState;
 
   const [rawGpsLoc, setRawGpsLoc] = useState<Coord>();
   const [geolocateTrigger, setGeolocateTrigger] = useState(0);
@@ -142,9 +157,15 @@ export default function Home() {
   const [nextTurnIndex, setNextTurnIndex] = useState(-1);
   const pathname = usePathname();
 
-  useEffect(() => { routeDataRef.current = routeData; }, [routeData]);
-  useEffect(() => { activeRouteRef.current = activeRoute; }, [activeRoute]);
-  useEffect(() => { snappedEdgeIDRef.current = snappedEdgeID; }, [snappedEdgeID]);
+  useEffect(() => {
+    routeDataRef.current = routeData;
+  }, [routeData]);
+  useEffect(() => {
+    activeRouteRef.current = activeRoute;
+  }, [activeRoute]);
+  useEffect(() => {
+    snappedEdgeIDRef.current = snappedEdgeID;
+  }, [snappedEdgeID]);
   const [userLoc, setUserLoc] = useState<UserLocation>({
     longitude: -100,
     latitude: 40,
@@ -186,7 +207,6 @@ export default function Home() {
         toast.error("Geolocation is not supported by this browser.");
       }
 
-
       replace(`${pathname}`);
     };
 
@@ -221,29 +241,38 @@ export default function Home() {
     }
   }, [isSourceFocused, searchParams, isDestinationFocused]);
 
-  const pushParam = useCallback((key: "source" | "destination", place: Place) => {
-    const p = new URLSearchParams(searchParams.toString());
-    p.set(
-      key,
-      `${place.osm_object.name} ${
-        place.osm_object.address != "" ? `, ${place.osm_object.address}` : ""
-      }`,
-    );
-    replace(`${pathname}?${p.toString()}`);
-  }, [searchParams, pathname, replace]);
+  const pushParam = useCallback(
+    (key: "source" | "destination", place: Place) => {
+      const p = new URLSearchParams(searchParams.toString());
+      p.set(
+        key,
+        `${place.osm_object.name} ${
+          place.osm_object.address != "" ? `, ${place.osm_object.address}` : ""
+        }`,
+      );
+      replace(`${pathname}?${p.toString()}`);
+    },
+    [searchParams, pathname, replace],
+  );
 
   const handleClickAlternativeCheckbox = useCallback(() => {
     setIsAlternativeChecked((prev) => !prev);
   }, []);
-  const onSelectSource = useCallback((place: Place) => {
-    setSourceLoc(place);
-    pushParam("source", place);
-  }, [pushParam]);
+  const onSelectSource = useCallback(
+    (place: Place) => {
+      setSourceLoc(place);
+      pushParam("source", place);
+    },
+    [pushParam],
+  );
 
-  const onSelectDestination = useCallback((place: Place) => {
-    setDestinationLoc(place);
-    pushParam("destination", place);
-  }, [pushParam]);
+  const onSelectDestination = useCallback(
+    (place: Place) => {
+      setDestinationLoc(place);
+      pushParam("destination", place);
+    },
+    [pushParam],
+  );
 
   const handleFocusSourceSearch = useCallback((val: boolean) => {
     setIsSourceFocused(val);
@@ -391,12 +420,15 @@ export default function Home() {
     }
   };
 
-  const onUserLocationUpdateHandler = useCallback((lat: number, lon: number) => {
-    setUserLoc({
-      latitude: lat,
-      longitude: lon,
-    });
-  }, []);
+  const onUserLocationUpdateHandler = useCallback(
+    (lat: number, lon: number) => {
+      setUserLoc({
+        latitude: lat,
+        longitude: lon,
+      });
+    },
+    [],
+  );
 
   const handleRouteClick = useCallback((index: number) => {
     setActiveRoute(index);
@@ -422,13 +454,16 @@ export default function Home() {
       lastMatchedPointRef.current = null;
 
       const usedRoute = routeDataRef.current?.[activeRouteRef.current];
-      const firstRouteEdgeID = usedRoute?.driving_directions?.[0]?.edge_ids?.[0];
-      
-      // We seed the map matcher with the first edge of the route to help it 
+      const firstRouteEdgeID =
+        usedRoute?.driving_directions?.[0]?.edge_ids?.[0];
+
+      // We seed the map matcher with the first edge of the route to help it
       // "lock on" to the starting road immediately.
       if (firstRouteEdgeID) {
         mapMatchStep.current = 1;
-        candidates.current = [{ edge_id: firstRouteEdgeID, weight: 1.0, length: 0 }];
+        candidates.current = [
+          { edge_id: firstRouteEdgeID, weight: 1.0, length: 0 },
+        ];
       } else {
         mapMatchStep.current = 1;
         candidates.current = [];
@@ -448,9 +483,6 @@ export default function Home() {
     setRouteStarted(start);
   }, []);
 
-
-  
-
   // route started useffect
   useEffect(() => {
     if (routeStarted) {
@@ -460,7 +492,6 @@ export default function Home() {
       }
 
       // WASM-only map matching
-
 
       let prevTime: Date = new Date();
       let currentGps: Gps;
@@ -477,7 +508,7 @@ export default function Home() {
             speedMeanK.current = DEFAULT_CONSTANT_SPEED;
             speedStdK.current = DEFAULT_CONSTANT_SPEED;
             lastBearing.current = 0.0;
-            setNavigationState(prev => ({
+            setNavigationState((prev) => ({
               ...prev,
               matchedHeading: 0,
               matchedGpsLoc: undefined,
@@ -502,35 +533,44 @@ export default function Home() {
           speedMeanK.current = resp.data.speed_mean_k;
           speedStdK.current = resp.data.speed_std_k;
           lastBearing.current = resp.data.edge_initial_bearing;
-          
-          const targetHeading = normalizeBearing(resp.data.edge_initial_bearing);
+
+          const targetHeading = normalizeBearing(
+            resp.data.edge_initial_bearing,
+          );
           const matched = resp.data.matched_gps_point.matched_coord;
 
           // Track time and distance spent
           if (!startTimeRef.current) {
             startTimeRef.current = new Date();
-            lastMatchedPointRef.current = { lat: matched.lat, lon: matched.lon };
+            lastMatchedPointRef.current = {
+              lat: matched.lat,
+              lon: matched.lon,
+            };
           } else if (lastMatchedPointRef.current) {
             const dist = haversineDistance(
               lastMatchedPointRef.current.lat,
               lastMatchedPointRef.current.lon,
               matched.lat,
-              matched.lon
+              matched.lon,
             );
             totalDistanceTraveledRef.current += dist;
-            lastMatchedPointRef.current = { lat: matched.lat, lon: matched.lon };
+            lastMatchedPointRef.current = {
+              lat: matched.lat,
+              lon: matched.lon,
+            };
           }
 
           if (!currentGpsLocRef.current) {
             currentGpsLocRef.current = { lat: matched.lat, lon: matched.lon };
             currentHeadingRef.current = targetHeading;
-            setNavigationState(prev => ({
+            setNavigationState((prev) => ({
               ...prev,
-              matchedGpsLoc: currentGpsLocRef.current ? { ...currentGpsLocRef.current } : undefined,
+              matchedGpsLoc: currentGpsLocRef.current
+                ? { ...currentGpsLocRef.current }
+                : undefined,
               matchedHeading: targetHeading,
             }));
           } else {
-           
             let duration = 0.5;
             if (prevGps.current?.time && currentGps?.time) {
               duration =
@@ -538,12 +578,10 @@ export default function Home() {
                 1000;
             }
 
-            
             duration = Math.max(
               MIN_ANIMATION_DURATION,
               Math.min(duration, MAX_ANIMATION_DURATION),
             );
-
 
             let diff = targetHeading - currentHeadingRef.current;
             if (diff > 180) diff -= 360;
@@ -557,7 +595,7 @@ export default function Home() {
               ease: "none",
               onUpdate: () => {
                 // No state update here, let the sync effect handle it
-              }
+              },
             });
 
             gsap.to(currentHeadingRef, {
@@ -566,7 +604,7 @@ export default function Home() {
               ease: "none",
               onUpdate: () => {
                 // No state update here, let the sync effect handle it
-              }
+              },
             });
           }
 
@@ -576,8 +614,6 @@ export default function Home() {
         }
       };
 
-
-
       const watchId = navigator.geolocation.watchPosition(
         async (pos) => {
           const currentTime = new Date();
@@ -585,8 +621,7 @@ export default function Home() {
           let deltaTime: number = 0;
           let speed = 0.0;
 
-          
-          let distance = 1
+          let distance = 1;
           if (pos.coords.speed !== null && pos.coords.speed !== undefined) {
             speed = pos.coords.speed;
           } else if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
@@ -594,7 +629,7 @@ export default function Home() {
               (currentTime.getTime() -
                 (prevGps.current?.time?.getTime() ?? 0)) /
               1000.0;
-             distance =
+            distance =
               haversineDistance(
                 prevGps.current?.lat ?? 0,
                 prevGps.current?.lon ?? 0,
@@ -616,12 +651,15 @@ export default function Home() {
           };
 
           // Speed threshold check: skip if stationary (but not the first step)
-          if (((speed < MIN_SPEED_THRESHOLD || speedMeanK.current < MIN_SPEED_THRESHOLD) && distance < THROTTLE_DISTANCE_THRESHOLD) && mapMatchStep.current > 1) {
-
+          if (
+            (speed < MIN_SPEED_THRESHOLD ||
+              speedMeanK.current < MIN_SPEED_THRESHOLD) &&
+            distance < THROTTLE_DISTANCE_THRESHOLD &&
+            mapMatchStep.current > 1
+          ) {
             return;
           }
 
-          
           let mapMatchRequest: MapMatchRequest = {
             gps_point: currentGps,
             k: mapMatchStep.current,
@@ -631,19 +669,21 @@ export default function Home() {
             last_bearing: lastBearing.current,
           };
 
-          await wasmMapMatcher.loadTile(pos.coords.latitude, pos.coords.longitude);
+          await wasmMapMatcher.loadTile(
+            pos.coords.latitude,
+            pos.coords.longitude,
+          );
           const resp = wasmMapMatcher.onlineMapMatch(
             mapMatchRequest.gps_point,
             mapMatchRequest.k,
             mapMatchRequest.candidates,
             mapMatchRequest.speed_mean_k,
             mapMatchRequest.speed_std_k,
-            mapMatchRequest.last_bearing
+            mapMatchRequest.last_bearing,
           );
           if (resp) handleMapMatchResponse({ data: resp });
 
           mapMatchStep.current += 1;
-
 
           setRawGpsLoc({ lat: currentGps.lat, lon: currentGps.lon });
           prevGps.current = currentGps;
@@ -688,7 +728,7 @@ export default function Home() {
                 mapMatchRequest.candidates,
                 mapMatchRequest.speed_mean_k,
                 mapMatchRequest.speed_std_k,
-                mapMatchRequest.last_bearing
+                mapMatchRequest.last_bearing,
               );
               if (resp) handleMapMatchResponse({ data: resp });
 
@@ -716,7 +756,7 @@ export default function Home() {
       lastBearing.current = 0.0;
       prevGps.current = undefined;
       deadReckoning.current = false;
-      setNavigationState(prev => ({
+      setNavigationState((prev) => ({
         ...prev,
         matchedGpsLoc: undefined,
         matchedHeading: 0,
@@ -731,7 +771,7 @@ export default function Home() {
   // Sync refs to state for UI updates at a controlled rate
   useEffect(() => {
     if (!routeStarted) return;
-    
+
     let frameId: number;
     let lastLat = 0;
     let lastLon = 0;
@@ -742,8 +782,8 @@ export default function Home() {
 
     /**
      * HIGH-FREQUENCY SYNC LOOP
-     * This loop runs at ~60fps using requestAnimationFrame. 
-     * It handles smooth car marker movement and calculates "Real-Time" distance/ETA 
+     * This loop runs at ~60fps using requestAnimationFrame.
+     * It handles smooth car marker movement and calculates "Real-Time" distance/ETA
      * based on the latest Map-Matched GPS location.
      */
     const sync = () => {
@@ -751,44 +791,53 @@ export default function Home() {
         const curLat = currentGpsLocRef.current.lat;
         const curLon = currentGpsLocRef.current.lon;
         const curH = normalizeBearing(currentHeadingRef.current);
-        
+
         let updatedState: any = {};
         let stateChanged = false;
 
         const usedRoute = routeDataRef.current?.[activeRouteRef.current];
         if (usedRoute) {
           const usedRouteDirections = usedRoute.driving_directions;
-          
+
           // 1. Identify which turn instruction the user is currently in.
           const directionsIndex = getCurrentUserDirectionIndex({
             snappedEdgeID: snappedEdgeIDRef.current,
             drivingDirections: usedRouteDirections,
           });
-          
-          if (directionsIndex !== lastDirIndex) {
+
+          if (
+            directionsIndex !== lastDirIndex ||
+            (mapMatchStep.current > 1 && directionsIndex == 0)
+          ) {
+
             updatedState.currentDirectionIndex = directionsIndex;
             lastDirIndex = directionsIndex;
             stateChanged = true;
           }
 
           // 2. Calculate distance to the next turn point (the "X meters to turn" number).
-          const nextTurnPoint = (directionsIndex >= 0 && usedRouteDirections[directionsIndex]?.turn_point)
-            ? usedRouteDirections[directionsIndex].turn_point
-            : {
-                lat: destinationLoc?.osm_object.lat ?? 0,
-                lon: destinationLoc?.osm_object.lon ?? 0,
-              };
+          const nextTurnPoint =
+            directionsIndex >= 0 &&
+            usedRouteDirections[directionsIndex]?.turn_point
+              ? usedRouteDirections[directionsIndex].turn_point
+              : {
+                  lat: destinationLoc?.osm_object.lat ?? 0,
+                  lon: destinationLoc?.osm_object.lon ?? 0,
+                };
 
-          const newDist = getDistanceFromUserToNextTurn({
-            matchedGpsLoc: { lat: curLat, lon: curLon },
-            nextTurnPoint,
-          }) * 1000.0; // Convert KM to Meters
-          
+          const newDist =
+            getDistanceFromUserToNextTurn({
+              matchedGpsLoc: { lat: curLat, lon: curLon },
+              nextTurnPoint,
+            }) * 1000.0; // Convert KM to Meters
+
           const timeSpent = startTimeRef.current
             ? (new Date().getTime() - startTimeRef.current.getTime()) / 60000
             : 0;
 
-          if (Math.abs(newDist - lastDist) > UPDATE_TURN_INSTRUCTION_DISTANCE_MIN) {
+          if (
+            Math.abs(newDist - lastDist) > UPDATE_TURN_INSTRUCTION_DISTANCE_MIN
+          ) {
             updatedState.distanceFromNextTurnPoint = newDist;
             lastDist = newDist;
             stateChanged = true;
@@ -840,7 +889,7 @@ export default function Home() {
 
         // 2. Throttled state update for UI re-render (Marker position)
         const dist = mercatorDistance(lastLat, lastLon, curLat, curLon);
-        
+
         // Threshold: 0.5m or 2 degrees to avoid overloading React
         if (dist > 0.5 || Math.abs(curH - lastH) > 2) {
           updatedState.matchedGpsLoc = { lat: curLat, lon: curLon };
@@ -852,8 +901,11 @@ export default function Home() {
         }
 
         const now = Date.now();
-        if (stateChanged && now - lastUpdateTimestamp > UPDATE_NAVIGATION_STATE_THRESHOLD_MS) {
-          setNavigationState(prev => ({ ...prev, ...updatedState }));
+        if (
+          stateChanged &&
+          now - lastUpdateTimestamp > UPDATE_NAVIGATION_STATE_THRESHOLD_MS
+        ) {
+          setNavigationState((prev) => ({ ...prev, ...updatedState }));
           lastUpdateTimestamp = now;
         }
       }
@@ -886,15 +938,18 @@ export default function Home() {
       });
 
       // If user is near the end of a step tagged as 'suggest_alternatives', fetch options.
-      if (isNearEndOfSuggestAlternativesStep({
-        snappedEdgeID: snappedEdgeID,
-        drivingDirections: usedRoute.driving_directions,
-        currentIndex: directionsIndex
-      }) && directionsIndex !== lastFetchedAlternativesStep.current && !isReroutingRef.current) {
-        
+      if (
+        isNearEndOfSuggestAlternativesStep({
+          snappedEdgeID: snappedEdgeID,
+          drivingDirections: usedRoute.driving_directions,
+          currentIndex: directionsIndex,
+        }) &&
+        directionsIndex !== lastFetchedAlternativesStep.current &&
+        !isReroutingRef.current
+      ) {
         lastFetchedAlternativesStep.current = directionsIndex;
         isReroutingRef.current = true;
-        ;(async () => {
+        (async () => {
           try {
             const reqBody = {
               srcLat: currentGpsLocRef.current?.lat || matchedGpsLoc?.lat!,
@@ -904,7 +959,7 @@ export default function Home() {
               reroute: true,
               startEdgeId: snappedEdgeID,
             };
-            
+
             // Proactive Refresh: Fetch new alternatives but keep the main route's progress.
             const altResponse = await fetchAlternativeRoutes(reqBody);
             const newAlternatives = altResponse.data.alternative_routes;
@@ -912,13 +967,17 @@ export default function Home() {
             if (newAlternatives.length > 0) {
               // Normalize alternatives so their "Remaining Distance" works with our current trackers.
               const currentDistOffset = totalDistanceTraveledRef.current;
-              const currentTimeOffset = (Date.now() - (startTimeRef.current?.getTime() ?? Date.now())) / 60000;
+              const currentTimeOffset =
+                (Date.now() - (startTimeRef.current?.getTime() ?? Date.now())) /
+                60000;
 
               newAlternatives.forEach((alt: any) => {
-                alt.distance = parseFloat(((alt.distance / 1000) + currentDistOffset).toFixed(2));
+                alt.distance = parseFloat(
+                  (alt.distance / 1000 + currentDistOffset).toFixed(2),
+                );
                 alt.travel_time = alt.travel_time + currentTimeOffset;
               });
-              
+
               const combinedRoutes = [usedRoute, ...newAlternatives];
               setRouteData(combinedRoutes);
               routeDataRef.current = combinedRoutes;
@@ -938,10 +997,16 @@ export default function Home() {
                 type: "Feature",
                 geometry: {
                   type: "LineString",
-                  coordinates: [[-100, 40], [-100, 40]],
+                  coordinates: [
+                    [-100, 40],
+                    [-100, 40],
+                  ],
                 },
               };
-              setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
+              setAlternativeRoutesLineData([
+                dummyRoute,
+                ...alternativesPolyline,
+              ]);
             }
           } catch (e) {
             console.error("Failed to fetch alternatives dynamically:", e);
@@ -961,21 +1026,28 @@ export default function Home() {
     if (matchedGpsLoc && usedRoute && !isReroutingRef.current) {
       const selectedRoute = usedRoute;
       // perform a re-route if the user's current location (snapped edge id) is outside the preferred route
-      ;(async () => {
+      (async () => {
         let isOffTheRoute = isUserOffTheRoute({
           snappedEdgeID: snappedEdgeID,
           routeData: selectedRoute,
         });
         if (isOffTheRoute && snappedEdgeID !== -1 && routeData) {
           // Check if user moved to another existing route
-          const otherRouteIndex = routeData.findIndex((route, idx) => 
-            idx !== activeRoute && !isUserOffTheRoute({ snappedEdgeID: snappedEdgeID, routeData: route })
+          const otherRouteIndex = routeData.findIndex(
+            (route, idx) =>
+              idx !== activeRoute &&
+              !isUserOffTheRoute({
+                snappedEdgeID: snappedEdgeID,
+                routeData: route,
+              }),
           );
 
           if (otherRouteIndex !== -1) {
             setActiveRoute(otherRouteIndex);
             isOffTheRoute = false;
-            toast.success(`Switched to alternative route ${otherRouteIndex + 1}`);
+            toast.success(
+              `Switched to alternative route ${otherRouteIndex + 1}`,
+            );
           }
         }
         if (isOffTheRoute && snappedEdgeID !== -1) {
@@ -1001,14 +1073,15 @@ export default function Home() {
             ]);
 
             newSpRouteData.data.distance = parseFloat(
-              (newSpRouteData.data.distance / 1000).toFixed(2)
+              (newSpRouteData.data.distance / 1000).toFixed(2),
             );
-            const newAlternatives = alternativeRouteData.data.alternative_routes;
+            const newAlternatives =
+              alternativeRouteData.data.alternative_routes;
             newAlternatives.forEach((alt: any) => {
               alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
             });
             const combinedRoutes = [newSpRouteData.data, ...newAlternatives];
-            
+
             setRouteData(combinedRoutes);
             routeDataRef.current = combinedRoutes;
 
@@ -1020,7 +1093,7 @@ export default function Home() {
                 coordinates: coords.map((coord) => [coord[1], coord[0]]),
               },
             };
-            
+
             setPolylineData(mainLineData);
 
             const alternativesPolyline = newAlternatives.map((route) => {
@@ -1034,7 +1107,7 @@ export default function Home() {
               };
             });
 
-            // In page.tsx, alternativeRoutesLineData includes a dummy at index 0 
+            // In page.tsx, alternativeRoutesLineData includes a dummy at index 0
             // to align with routeData (where index 0 is the main route)
             const dummyRoute: LineData = {
               type: "Feature",
@@ -1047,7 +1120,7 @@ export default function Home() {
               },
             };
             setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
-            
+
             // Reset active route to 0 after reroute
             setActiveRoute(0);
             activeRouteRef.current = 0;
@@ -1065,13 +1138,7 @@ export default function Home() {
         }
       })();
     }
-    
-  }, [
-    snappedEdgeID,
-    routeData,
-    activeRoute,
-    destinationLoc,
-  ]);
+  }, [snappedEdgeID, routeData, activeRoute, destinationLoc]);
 
   const handleSetRouteDataCRP = useCallback((data: RouteCRPResponse[]) => {
     setRouteData(data);
@@ -1152,7 +1219,5 @@ export default function Home() {
         <SearchResults places={searchResults} select={onSelectDestination} />
       )}
     </main>
-
-
   );
 }
