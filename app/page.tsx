@@ -41,6 +41,7 @@ import {
   MIN_ANIMATION_DURATION,
   MAX_ANIMATION_DURATION,
   USER_HAS_ARRIVED_DESTINATION_DISTANCE,
+  UPDATE_TURN_INSTRUCTION_DISTANCE_MIN,
 } from "@/app/lib/constants";
 import gsap from "gsap";
 import { wasmMapMatcher } from "./lib/wasmMapmatch";
@@ -766,7 +767,7 @@ export default function Home() {
             stateChanged = true;
           }
 
-          const newDist = getDistanceFromUserToNextTurn({
+        const newDist = getDistanceFromUserToNextTurn({
             matchedGpsLoc: { lat: curLat, lon: curLon },
             nextTurnPoint: usedRouteDirections.length > 0
               ? usedRouteDirections[directionsIndex].turn_point
@@ -780,7 +781,7 @@ export default function Home() {
             ? (new Date().getTime() - startTimeRef.current.getTime()) / 60000
             : 0;
 
-          if (Math.abs(newDist - lastDist) > 1) {
+          if (Math.abs(newDist - lastDist) > UPDATE_TURN_INSTRUCTION_DISTANCE_MIN) {
             updatedState.distanceFromNextTurnPoint = newDist;
             lastDist = newDist;
             stateChanged = true;
@@ -851,9 +852,10 @@ export default function Home() {
       }
       frameId = requestAnimationFrame(sync);
     };
+
     frameId = requestAnimationFrame(sync);
     return () => cancelAnimationFrame(frameId);
-  }, [routeStarted]);
+  }, [routeStarted, routeData, activeRoute]);
 
   // Keep a ref to alternativeRoutesLineData so the re-routing effect can read
   // the latest value without listing it as a dependency (which caused an infinite loop).
@@ -901,6 +903,7 @@ export default function Home() {
               const mainRoute = routeData[0];
               const combinedRoutes = [mainRoute, ...newAlternatives];
               setRouteData(combinedRoutes);
+              routeDataRef.current = combinedRoutes;
 
               const alternativesPolyline = newAlternatives.map((route) => {
                 const coords = polyline.decode(route.path);
@@ -989,6 +992,7 @@ export default function Home() {
             const combinedRoutes = [newSpRouteData.data, ...newAlternatives];
             
             setRouteData(combinedRoutes);
+            routeDataRef.current = combinedRoutes;
 
             const coords = polyline.decode(newSpRouteData.data.path);
             const mainLineData: LineData = {
@@ -1028,6 +1032,7 @@ export default function Home() {
             
             // Reset active route to 0 after reroute
             setActiveRoute(0);
+            activeRouteRef.current = 0;
           } catch (e: any) {
             toast.error(
               `Failed to fetch route (re-routing): ${e?.message ?? "Unknown error"}`,
