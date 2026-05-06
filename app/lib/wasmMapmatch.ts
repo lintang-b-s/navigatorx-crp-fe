@@ -8,6 +8,7 @@ import geohash from "ngeohash";
 export class WasmMapMatcher {
     private isReady = false;
     private currentTile: string | null = null;
+    private loadingTiles = new Set<string>();
     private isInitializing = false;
     private apiUrl = process.env.NEXT_PUBLIC_ROUTER_API_URL || "http://localhost:6060";
 
@@ -86,10 +87,10 @@ export class WasmMapMatcher {
         if (!this.isReady) return;
 
         const gh = geohash.encode(lat, lon, 6);
-        if (this.currentTile === gh) return;
-        // only RebuildMapMatchGraph jika current user gehoash tile berubah...
+        if (this.currentTile === gh || this.loadingTiles.has(gh)) return;
+        
+        this.loadingTiles.add(gh);
         try {
-
             const response = await axios.get(`${this.apiUrl}/api/tile/${gh}`, {
                 responseType: 'arraybuffer'
             });
@@ -97,9 +98,10 @@ export class WasmMapMatcher {
             const tileData = new Uint8Array(response.data);
             (window as any).RebuildMapMatchGraph(tileData);
             this.currentTile = gh;
-
         } catch (error) {
             console.warn(`[WasmMapMatcher] Failed to load tile ${gh}:`, error);
+        } finally {
+            this.loadingTiles.delete(gh);
         }
     }
 

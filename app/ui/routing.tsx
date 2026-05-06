@@ -431,11 +431,8 @@ function showRouteResultMobile(
           <div className="bg-white/10 p-2 rounded-xl">
             <Image
               src={getTurnIcon(
-                props.routeDataCRP![activeRoute].driving_directions.length > 0 ?  props.routeDataCRP![activeRoute].driving_directions[
-                  props.currentDirectionIndex
-                ].turn_type: "CONTINUE_ONTO",
-                "icons_white",
-              )}
+              props.routeDataCRP![activeRoute].driving_directions.length > 0   ? props.routeDataCRP![activeRoute].driving_directions[props.currentDirectionIndex].turn_type   : "CONTINUE_ONTO",
+                "icons_white",)}
               width={42}
               height={42}
               alt={`turn-start-route`}
@@ -727,7 +724,7 @@ function showRouteDirectionsComponent(
                      cursor-pointer aria-disabled:opacity-50 ml-auto mr-2 py-3 `}
           onClick={(e) => {
             toast.error(
-              "Navigate feature only avalable on mobile device view! ",
+              "Navigate feature only available on mobile device view! ",
             );
           }}
         >
