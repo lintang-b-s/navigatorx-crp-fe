@@ -131,6 +131,7 @@ export default function Home() {
 
   const [rawGpsLoc, setRawGpsLoc] = useState<Coord>();
   const [geolocateTrigger, setGeolocateTrigger] = useState(0);
+  const [speed, setSpeed] = useState(0);
 
   // search states
   const searchParams = useSearchParams();
@@ -686,6 +687,7 @@ export default function Home() {
           mapMatchStep.current += 1;
 
           setRawGpsLoc({ lat: currentGps.lat, lon: currentGps.lon });
+          setSpeed(currentGps.speed);
           prevGps.current = currentGps;
           prevTime = currentTime;
         },
@@ -734,6 +736,8 @@ export default function Home() {
 
               mapMatchStep.current += 1;
 
+              setRawGpsLoc({ lat: currentGps.lat, lon: currentGps.lon });
+              setSpeed(currentGps.speed);
               prevTime = currentTime;
             }
           }
@@ -1213,6 +1217,7 @@ export default function Home() {
         isAlternativeChecked={isAlternativeChecked}
         onSelectSource={onSelectSource}
         onSelectDestination={onSelectDestination}
+        speed={speed}
       />
 
       {showResult && isSourceFocused && (

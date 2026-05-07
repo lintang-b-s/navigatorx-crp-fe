@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",
+    "@qwik.dev/partytown": "^0.13.2",
     "@types/ngeohash": "^0.6.8",
     "@vis.gl/react-maplibre": "^8.0.4",
     "axios": "^1.8.4",

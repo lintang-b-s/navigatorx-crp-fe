@@ -16,18 +16,12 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css"; // See notes below
 import { useEffect, useMemo, useState, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import toast from "react-hot-toast";
+
 import { LineData, MapComponentProps } from "../types/definition";
-import Image from "next/image";
+
 import { IoLocationSharp } from "react-icons/io5";
-import { FaLocationArrow } from "react-icons/fa";
-import polyline from "@mapbox/polyline";
-import {
-  fetchAlternativeRoutes,
-  fetchRouteCRP,
-  fetchBoundingBox,
-} from "../lib/navigatorxApi";
-import { haversineDistance } from "../lib/util";
+
+import { fetchBoundingBox } from "../lib/navigatorxApi";
 
 const ACTIVE_ROUTE_COLOR = "#470DF9";
 const ACTIVE_ROUTE_OPACITY = 0.9;
@@ -754,13 +748,13 @@ const ImperativeNavigationMarker = ({
       clearTimeout(interactionTimeout);
     };
 
-    mapInstance.on('dragstart', onUserInteractionStart);
-    mapInstance.on('zoomstart', onUserInteractionStart);
-    mapInstance.on('pitchstart', onUserInteractionStart);
-    mapInstance.on('dragend', onUserInteractionEnd);
-    mapInstance.on('zoomend', onUserInteractionEnd);
-    mapInstance.on('pitchend', onUserInteractionEnd);
-    mapInstance.on('resume-tracking', onResumeTracking);
+    mapInstance.on("dragstart", onUserInteractionStart);
+    mapInstance.on("zoomstart", onUserInteractionStart);
+    mapInstance.on("pitchstart", onUserInteractionStart);
+    mapInstance.on("dragend", onUserInteractionEnd);
+    mapInstance.on("zoomend", onUserInteractionEnd);
+    mapInstance.on("pitchend", onUserInteractionEnd);
+    mapInstance.on("resume-tracking", onResumeTracking);
 
     const update = () => {
       if (currentGpsLocRef.current && markerRef.current) {
@@ -782,7 +776,7 @@ const ImperativeNavigationMarker = ({
                 bottom: 0,
                 left: 0,
                 right: 0,
-              }
+              },
             });
           }
         }
@@ -794,13 +788,13 @@ const ImperativeNavigationMarker = ({
     return () => {
       cancelAnimationFrame(frameId);
       clearTimeout(interactionTimeout);
-      mapInstance.off('dragstart', onUserInteractionStart);
-      mapInstance.off('zoomstart', onUserInteractionStart);
-      mapInstance.off('pitchstart', onUserInteractionStart);
-      mapInstance.off('dragend', onUserInteractionEnd);
-      mapInstance.off('zoomend', onUserInteractionEnd);
-      mapInstance.off('pitchend', onUserInteractionEnd);
-      mapInstance.off('resume-tracking', onResumeTracking);
+      mapInstance.off("dragstart", onUserInteractionStart);
+      mapInstance.off("zoomstart", onUserInteractionStart);
+      mapInstance.off("pitchstart", onUserInteractionStart);
+      mapInstance.off("dragend", onUserInteractionEnd);
+      mapInstance.off("zoomend", onUserInteractionEnd);
+      mapInstance.off("pitchend", onUserInteractionEnd);
+      mapInstance.off("resume-tracking", onResumeTracking);
       if (markerRef.current) {
         markerRef.current.remove();
         markerRef.current = null;

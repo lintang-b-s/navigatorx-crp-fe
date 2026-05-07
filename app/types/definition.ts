@@ -42,6 +42,7 @@ export type RouterProps = {
   ignoreDistanceCheck?: boolean;
   timeSpent?: number;
   distanceTraveled?: number;
+  speed?: number;
 };
 
 export type SearchSelectorProps = {
