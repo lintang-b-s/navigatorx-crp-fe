@@ -20,6 +20,8 @@ import { FaCircle } from "react-icons/fa6";
 import toast from "react-hot-toast";
 import { AiOutlineThunderbolt } from "react-icons/ai";
 import { RxCross1 } from "react-icons/rx";
+import { Badge } from "./badge";
+import { Spinner } from "./spinner";
 
 const formatTime = (minutes: number): string => {
   return new Intl.NumberFormat("id-ID", {
@@ -32,6 +34,15 @@ const formatDistance = (distance: number): string => {
     maximumFractionDigits: 2,
   }).format(distance);
 };
+
+function StartingNavigationBadge() {
+  return (
+    <Badge aria-live="polite" className="bg-white text-blue-700">
+      <Spinner data-icon="inline-start" />
+      Starting navigation
+    </Badge>
+  );
+}
 
 export const Router = React.memo(function Router(props: RouterProps) {
   const [isSourceFocused, setIsSourceFocused] = useState(false);
@@ -269,6 +280,7 @@ function showRouteResultMobile(
                   <p> Back</p>
                 </button>
                 <button
+                  disabled={props.isStartingNavigation}
                   className={`${
                     props.ignoreDistanceCheck ||
                     haversineDistance(
@@ -283,16 +295,30 @@ function showRouteResultMobile(
                     text-sm font-mRouteedium text-white font-bold transition-colors
                      hover:bg-blue-400 focus-visible:outline 
                        focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
-                       cursor-pointer aria-disabled:opacity-50 space-x-2 gap-x-1`}
+                       cursor-pointer disabled:cursor-wait disabled:bg-blue-400 disabled:opacity-80 aria-disabled:opacity-50 space-x-2 gap-x-1`}
                   onClick={(e) => {
                     handleStartRoute(true);
                     props.handleDirectionActive(true);
                   }}
                 >
-                  <AiOutlineThunderbolt size={18} color="white" />
-                  Navigate{" "}
+                  {props.isStartingNavigation ? (
+                    <>
+                      <Spinner className="text-white" data-icon="inline-start" />
+                      Starting
+                    </>
+                  ) : (
+                    <>
+                      <AiOutlineThunderbolt size={18} color="white" />
+                      Navigate
+                    </>
+                  )}
                 </button>
               </div>
+              {props.isStartingNavigation && (
+                <div className="px-3 pb-2">
+                  <StartingNavigationBadge />
+                </div>
+              )}
               {(routeDirections ?? []).map((direction, index) => (
                 <div
                   key={`route-${index}`}
@@ -352,6 +378,7 @@ function showRouteResultMobile(
                   </p>
                 </div>
                 <button
+                  disabled={props.isStartingNavigation}
                   className={`${
                     props.ignoreDistanceCheck ||
                     haversineDistance(
@@ -366,16 +393,30 @@ function showRouteResultMobile(
                     text-sm font-mRouteedium text-white font-bold transition-colors
                      hover:bg-blue-400 focus-visible:outline 
                        focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
-                       cursor-pointer aria-disabled:opacity-50 space-x-2 gap-x-1`}
+                       cursor-pointer disabled:cursor-wait disabled:bg-blue-400 disabled:opacity-80 aria-disabled:opacity-50 space-x-2 gap-x-1`}
                   onClick={(e) => {
                     handleStartRoute(true);
                     props.handleDirectionActive(true);
                   }}
                 >
-                  <AiOutlineThunderbolt size={18} color="white" />
-                  Navigate{" "}
+                  {props.isStartingNavigation ? (
+                    <>
+                      <Spinner className="text-white" data-icon="inline-start" />
+                      Starting
+                    </>
+                  ) : (
+                    <>
+                      <AiOutlineThunderbolt size={18} color="white" />
+                      Navigate
+                    </>
+                  )}
                 </button>
               </div>
+              {props.isStartingNavigation && (
+                <div className="px-3 pb-2">
+                  <StartingNavigationBadge />
+                </div>
+              )}
 
               {props.routeDataCRP &&
                 props.routeDataCRP.map((route, index) => (

@@ -24,6 +24,7 @@ export type RouterProps = {
   routeDataCRP?: RouteCRPResponse[];
   activeRoute: number;
   routeStarted: boolean;
+  isStartingNavigation?: boolean;
   handleRouteClick: (index: number) => void;
   handleDirectionActive: (show: boolean) => void;
   handleSetNextTurnIndex: (index: number) => void;

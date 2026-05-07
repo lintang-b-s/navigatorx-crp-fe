@@ -22,6 +22,7 @@ A critical architectural decision in NavigatorX is the separation of **High-Freq
 
 1.  **Mutable Refs (`useRef`)**: All performance-critical calculations (GPS map matching, 60fps car animations, distance-to-next-turn math) are handled using `useRef`. This allows the application to process data 60 times per second without triggering React's expensive re-render cycle.
 2.  **Reactive State (`useState`)**: React state is used only for elements that the user sees on screen (instruction text, distance numbers, map visibility). State updates are "throttled" by the natural speed of the browser's render cycle, while the underlying math remains frame-accurate in the background.
+3.  **Web Worker Offloading**: CPU-intensive operations are separated from the main UI thread. Heavy operations like polyline decoding, JSON parsing for massive alternative routes (`routingWorkerProxy.ts`), and the entire WASM map-matching graph traversal (`wasmMapMatch.worker.ts`) execute asynchronously to prevent main-thread blocking and ensure consistent 60fps UI animations.
 
 ## Detailed File Breakdown
 
@@ -53,15 +54,15 @@ Online map matching aligns noisy raw GPS coordinates from the device to actual r
 
 Unlike traditional HMM-based methods that introduce latency by waiting for future GPS points (Viterbi), NavigatorX uses MHT to provide **near-zero-latency matching**. It maintains a set of **weighted hypotheses (candidates)** for the current road segment.
 The logic specifically follows the **Multiple Hypothesis Technique (MHT)** and **Route Prediction** model described in:
-> [1] Taguchi, S., Koide, S. and Yoshimura, T. (2019) “Online Map Matching With Route Prediction,” IEEE Transactions on Intelligent Transportation Systems, 20(1), pp. 338–347. [Available at IEEE](https://doi.org/10.1109/TITS.2018.2812147).
 
+> [1] Taguchi, S., Koide, S. and Yoshimura, T. (2019) “Online Map Matching With Route Prediction,” IEEE Transactions on Intelligent Transportation Systems, 20(1), pp. 338–347. [Available at IEEE](https://doi.org/10.1109/TITS.2018.2812147).
 
 ### Implementation Details:
 
-- **Initialization**: Triggered when `routeStarted` is set to `true`. Initializes the WASM engine via `wasmMapMatcher.init()`. It loads `wasm_exec.js` and `online_map_matcher.wasm` with cache-busting query parameters.
+- **Initialization**: Triggered when `routeStarted` is set to `true`. Initializes the WASM engine via `wasmMapMatcher.init()`. It establishes a dedicated Web Worker (`wasmMapMatch.worker.ts`) wrapped via Comlink to handle WASM instantiation and graph logic without blocking the UI thread. The initial tile must be explicitly `await`ed before starting tracking to guarantee the graph is populated.
 - **Graph Context & Dynamic Tiles**:
   - NavigatorX uses **Geohashing** (level 6) to partition map data.
-  - As the user moves, `loadTile(lat, lon)` fetches tile-specific **CSR (Compressed Sparse Row)** graph data to rebuild the local matching graph on-the-fly.
+  - As the user moves, `loadTile(lat, lon)` runs asynchronously in the background inside the `watchPosition` loop. It fetches tile-specific **CSR (Compressed Sparse Row)** graph data to rebuild the local matching graph on-the-fly.
 - **Local Execution**: The matching logic runs entirely on the client (Go-compiled WASM), eliminating server round-trip latency and enabling real-time UI synchronization.
 - **Dead Reckoning**: If GPS signal is lost (`LOST_GPS_THRESHOLD` exceeded), the engine uses a **constant velocity model** to predict the next coordinate, feeding it back into the MHT process to maintain path continuity.
 - **Smooth Marker Animation (60 FPS)**: Uses `gsap` (GreenSock) inside an imperative `requestAnimationFrame` loop to animate the car marker between matched coordinates, filtering out GPS jitter and providing a premium navigation experience.
@@ -72,7 +73,7 @@ Driving directions are fetched from the routing engine and displayed contextuall
 
 ### Mechanism:
 
-- **Routing API**: Initiated by `fetchRouteCRP`, which returns a `RouteCRPResponse` containing the full polyline `path` and an array of `driving_directions`.
+- **Routing API**: Initiated by `routingWorker.fetchAndProcessRoutes(reqBody)`, which proxies the heavy API call (`fetchRouteCRP`) and subsequent data transformation (e.g., Polyline decoding into GeoJSON) entirely within a dedicated Web Worker (`routing.worker.ts`). This ensures the map doesn't freeze when calculating cross-country routes. It returns a combined `RouteCRPResponse` containing the full polyline `path` and an array of `driving_directions`.
 - **Direction Structure**: Each direction step contains:
   - `edge_ids`: The sequence of road segment IDs that make up this specific direction.
   - `turn_point`: Latitude and longitude of where the maneuver/turn happens.
@@ -96,7 +97,7 @@ Rerouting happens automatically when the user deviates from the active path.
 
 - **Off-Route Detection**: `isUserOffTheRoute` is checked inside a `useEffect` whenever `snappedEdgeID` changes. It loops through all `edge_ids` in all `driving_directions` of the current route. If `snappedEdgeID` is not found in the set of the route's edges, the user is off-route.
 - **Alternative Match Check**: Before requesting a completely new route from the backend, the app checks if the user simply switched to one of the previously fetched alternative routes (`otherRouteIndex`). If true, it just switches `activeRoute` without an API call.
-- **API Reroute Request**: If genuinely off-route, and the map match step is beyond the initial buffer (e.g., `mapMatchStep > 5` to prevent false positive reroutes at startup), a reroute API call is made to both `fetchRouteCRP` and `fetchAlternativeRoutes`.
+- **API Reroute Request**: If genuinely off-route, and the map match step is beyond the initial buffer (e.g., `mapMatchStep > 5` to prevent false positive reroutes at startup), a reroute API call is made via `routingWorker.fetchAndProcessRoutes` passing the `reroute: true` flag. This runs in the Web Worker to avoid freezing the UI.
 - **Payload**: The payload includes `reroute: true`, `startEdgeId: snappedEdgeID`, and the current user location as the new source.
 - **State Reset**: `routeData` is replaced, `polylineData` is redrawn, and `activeRoute` is reset to `0`.
 

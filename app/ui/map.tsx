@@ -728,6 +728,9 @@ const ImperativeNavigationMarker = ({
     let frameId: number;
     let isUserInteracting = false;
     let interactionTimeout: NodeJS.Timeout;
+    let lastLon = Number.NaN;
+    let lastLat = Number.NaN;
+    let lastHeading = Number.NaN;
 
     const onUserInteractionStart = () => {
       isUserInteracting = true;
@@ -759,10 +762,20 @@ const ImperativeNavigationMarker = ({
         const newLon = currentGpsLocRef.current.lon;
         const newLat = currentGpsLocRef.current.lat;
         const newHeading = currentHeadingRef.current || 0;
+        const positionChanged = newLon !== lastLon || newLat !== lastLat;
+        const headingChanged = newHeading !== lastHeading;
 
-        if (newLon !== 0 && newLat !== 0) {
-          markerRef.current.setLngLat([newLon, newLat]);
-          markerRef.current.setRotation(newHeading);
+        if (newLon !== 0 && newLat !== 0 && (positionChanged || headingChanged)) {
+          if (positionChanged) {
+            markerRef.current.setLngLat([newLon, newLat]);
+            lastLon = newLon;
+            lastLat = newLat;
+          }
+
+          if (headingChanged) {
+            markerRef.current.setRotation(newHeading);
+            lastHeading = newHeading;
+          }
 
           if (!isUserInteracting) {
             mapInstance.jumpTo({

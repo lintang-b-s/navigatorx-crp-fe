@@ -13,6 +13,7 @@ import {
 } from "react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { fetchReverseGeocoding, fetchSearch, Place } from "@/app/lib/searchApi";
+import { routingWorker } from "@/app/lib/routingWorkerProxy";
 import toast from "react-hot-toast";
 import {
   AlternativeRoutesResponse,
@@ -145,6 +146,7 @@ export default function Home() {
   const [routeData, setRouteData] = useState<RouteCRPResponse[]>();
   const [activeRoute, setActiveRoute] = useState(0);
   const [isDirectionActive, setIsDirectionActive] = useState(false);
+  const [isStartingNavigation, setIsStartingNavigation] = useState(false);
   const [sourceLoc, setSourceLoc] = useState<Place>();
   const [destinationLoc, setDestinationLoc] = useState<Place>();
   const [polylineData, setPolylineData] = useState<LineData>();
@@ -175,8 +177,9 @@ export default function Home() {
   const parseCoordinates = useCallback((input: string) => {
     const coordRegex =
       /^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/;
-    if (coordRegex.test(input)) {
-      const [lat, lon] = input.split(",").map((v) => parseFloat(v.trim()));
+    const trimmedInput = input.trim();
+    if (coordRegex.test(trimmedInput)) {
+      const [lat, lon] = trimmedInput.split(",").map((v) => parseFloat(v.trim()));
       if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
         return { lat, lon };
       }
@@ -314,72 +317,18 @@ export default function Home() {
         destLon: destinationLoc?.osm_object.lon!,
       };
 
-      let alternativeRouteData: AlternativeRoutesResponse | undefined =
-        undefined;
-      let spRouteData: RouteCRPResponseWrapper | undefined = undefined;
-      if (isAlternativeChecked) {
-        [spRouteData, alternativeRouteData] = await Promise.all([
-          fetchRouteCRP(reqBody),
-          fetchAlternativeRoutes(reqBody),
-        ]);
-      } else {
-        [spRouteData] = await Promise.all([fetchRouteCRP(reqBody)]);
-      }
-
-      spRouteData.data.distance = parseFloat(
-        (spRouteData.data.distance / 1000).toFixed(2),
-      );
-
+      const processedRoutes = await routingWorker.fetchAndProcessRoutes(reqBody, isAlternativeChecked);
+      
       setActiveRoute(0);
-
-      const coords = polyline.decode(spRouteData.data.path);
-      const linedata: LineData = {
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: coords.map((coord) => [coord[1], coord[0]]),
-        },
-      };
-
-      setPolylineData(linedata);
-
-      if (
-        alternativeRouteData &&
-        alternativeRouteData.data.alternative_routes.length > 0
-      ) {
-        alternativeRouteData.data.alternative_routes.map((alt) => {
-          alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
-        });
-        const dummyRoute: LineData = {
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: [
-              [-100, 40],
-              [-100, 40],
-            ],
-          },
-        };
-
-        const alternativesPolyline =
-          alternativeRouteData.data.alternative_routes.map((route) => {
-            const coords = polyline.decode(route.path);
-            return {
-              type: "Feature",
-              geometry: {
-                type: "LineString",
-                coordinates: coords.map((coord) => [coord[1], coord[0]]),
-              },
-            };
-          });
-        setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
-        setRouteData([
-          spRouteData.data,
-          ...alternativeRouteData.data.alternative_routes,
-        ]);
+      setPolylineData(processedRoutes.mainLineData);
+      
+      if (processedRoutes.alternativeRoutesLineData.length > 0) {
+        setAlternativeRoutesLineData(processedRoutes.alternativeRoutesLineData);
       } else {
-        setRouteData([spRouteData.data]);
+        setAlternativeRoutesLineData([]);
       }
+      
+      setRouteData(processedRoutes.combinedRoutes);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -449,7 +398,23 @@ export default function Home() {
    */
   const handleStartRoute = useCallback(async (start: boolean) => {
     if (start) {
-      await wasmMapMatcher.init();
+      setIsStartingNavigation(true);
+      try {
+        await wasmMapMatcher.init();
+
+        // Ensure the initial tile is loaded BEFORE we start watching position
+        const usedRoute = routeDataRef.current?.[activeRouteRef.current];
+        const startLat = usedRoute?.driving_directions?.[0]?.turn_point?.lat;
+        const startLon = usedRoute?.driving_directions?.[0]?.turn_point?.lon;
+        if (startLat !== undefined && startLon !== undefined) {
+          await wasmMapMatcher.loadTile(startLat, startLon);
+        }
+      } catch (error) {
+        setIsDirectionActive(false);
+        return;
+      } finally {
+        setIsStartingNavigation(false);
+      }
       startTimeRef.current = null; // Reset trip start time
       totalDistanceTraveledRef.current = 0; // Reset odometer
       lastMatchedPointRef.current = null;
@@ -670,12 +635,10 @@ export default function Home() {
             last_bearing: lastBearing.current,
           };
 
-          await wasmMapMatcher.loadTile(
-            pos.coords.latitude,
-            pos.coords.longitude,
-          );
+          // Intentionally NOT awaited here so it runs asynchronously while onlineMapMatch continues
+          void wasmMapMatcher.loadTile(pos.coords.latitude, pos.coords.longitude);
 
-          const resp = wasmMapMatcher.onlineMapMatch(
+          const resp = await wasmMapMatcher.onlineMapMatch(
             mapMatchRequest.gps_point,
             mapMatchRequest.k,
             mapMatchRequest.candidates,
@@ -725,8 +688,10 @@ export default function Home() {
                 last_bearing: lastBearing.current,
               };
 
-              await wasmMapMatcher.loadTile(currentGps.lat, currentGps.lon);
-              const resp = wasmMapMatcher.onlineMapMatch(
+              // Intentionally NOT awaited here so it runs asynchronously while onlineMapMatch continues
+              void wasmMapMatcher.loadTile(currentGps.lat, currentGps.lon);
+
+              const resp = await wasmMapMatcher.onlineMapMatch(
                 mapMatchRequest.gps_point,
                 mapMatchRequest.k,
                 mapMatchRequest.candidates,
@@ -747,7 +712,7 @@ export default function Home() {
         {
           enableHighAccuracy: true,
           maximumAge: 0,
-          timeout: 5000,
+          timeout: 2000,
         },
       );
 
@@ -1076,59 +1041,13 @@ export default function Home() {
               reroute: true,
               startEdgeId: snappedEdgeID,
             };
-            const [newSpRouteData, alternativeRouteData] = await Promise.all([
-              fetchRouteCRP(reqBody),
-              fetchAlternativeRoutes(reqBody),
-            ]);
+            const processedRoutes = await routingWorker.fetchAndProcessRoutes(reqBody, true);
 
-            newSpRouteData.data.distance = parseFloat(
-              (newSpRouteData.data.distance / 1000).toFixed(2),
-            );
-            const newAlternatives =
-              alternativeRouteData.data.alternative_routes;
-            newAlternatives.forEach((alt: any) => {
-              alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
-            });
-            const combinedRoutes = [newSpRouteData.data, ...newAlternatives];
+            setRouteData(processedRoutes.combinedRoutes);
+            routeDataRef.current = processedRoutes.combinedRoutes;
 
-            setRouteData(combinedRoutes);
-            routeDataRef.current = combinedRoutes;
-
-            const coords = polyline.decode(newSpRouteData.data.path);
-            const mainLineData: LineData = {
-              type: "Feature",
-              geometry: {
-                type: "LineString",
-                coordinates: coords.map((coord) => [coord[1], coord[0]]),
-              },
-            };
-
-            setPolylineData(mainLineData);
-
-            const alternativesPolyline = newAlternatives.map((route) => {
-              const coords = polyline.decode(route.path);
-              return {
-                type: "Feature",
-                geometry: {
-                  type: "LineString",
-                  coordinates: coords.map((coord) => [coord[1], coord[0]]),
-                },
-              };
-            });
-
-            // In page.tsx, alternativeRoutesLineData includes a dummy at index 0
-            // to align with routeData (where index 0 is the main route)
-            const dummyRoute: LineData = {
-              type: "Feature",
-              geometry: {
-                type: "LineString",
-                coordinates: [
-                  [-100, 40],
-                  [-100, 40],
-                ],
-              },
-            };
-            setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
+            setPolylineData(processedRoutes.mainLineData);
+            setAlternativeRoutesLineData(processedRoutes.alternativeRoutesLineData);
 
             // Reset active route to 0 after reroute
             setActiveRoute(0);
@@ -1207,6 +1126,7 @@ export default function Home() {
         handleSetNextTurnIndex={handleSetNextTurnIndex}
         handleStartRoute={handleStartRoute}
         routeStarted={routeStarted}
+        isStartingNavigation={isStartingNavigation}
         distanceFromNextTurnPoint={distanceFromNextTurnPoint}
         currentDirectionIndex={currentDirectionIndex}
         timeSpent={timeSpent}

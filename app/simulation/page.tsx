@@ -10,6 +10,7 @@ import gsap from "gsap";
 import { fetchRouteCRP, RouteCRPResponse, fetchAlternativeRoutes } from "@/app/lib/navigatorxApi";
 import { LineData } from "@/app/types/definition";
 import polyline from "@mapbox/polyline";
+import { routingWorker } from "@/app/lib/routingWorkerProxy";
 import { 
   getCurrentUserDirectionIndex, 
   getDistanceFromUserToNextTurn, 
@@ -140,6 +141,9 @@ export default function SimulationPage() {
 
     if (useWasm) {
       await wasmMapMatcher.init();
+      if (points.length > 0) {
+        await wasmMapMatcher.loadTile(points[0].Latitude, points[0].Longitude);
+      }
     }
 
     if (useWebSocket) {
@@ -186,59 +190,18 @@ export default function SimulationPage() {
         destLat: lastPoint.Latitude,
         destLon: lastPoint.Longitude,
       };
-      const [newSpRouteData, alternativeRouteData] = await Promise.all([
-        fetchRouteCRP(reqBody),
-        fetchAlternativeRoutes(reqBody),
-      ]);
+      const processedRoutes = await routingWorker.fetchAndProcessRoutes(reqBody, true);
 
-      newSpRouteData.data.distance = parseFloat(
-        (newSpRouteData.data.distance / 1000).toFixed(2)
-      );
-      const newAlternatives = alternativeRouteData.data.alternative_routes;
-      newAlternatives.forEach((alt: any) => {
-        alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
-      });
+      setRouteData(processedRoutes.combinedRoutes);
+      routeDataRef.current = processedRoutes.combinedRoutes;
 
-      const combinedRoutes = [
-        newSpRouteData.data,
-        ...newAlternatives,
-      ];
-
-      setRouteData(combinedRoutes);
-      routeDataRef.current = combinedRoutes;
+      setPolylineData(processedRoutes.mainLineData);
       
-      const coords = polyline.decode(newSpRouteData.data.path);
-      const linedata: LineData = {
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: coords.map((coord) => [coord[1], coord[0]]),
-        },
-      };
-      setPolylineData(linedata);
-
-      const alternativesPolyline = alternativeRouteData.data.alternative_routes.map((route) => {
-        const coords = polyline.decode(route.path);
-        return {
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: coords.map((coord) => [coord[1], coord[0]]),
-          },
-        } as LineData;
-      });
-      
-      const dummyRoute: LineData = {
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [
-            [-100, 40],
-            [-100, 40],
-          ],
-        },
-      };
-      setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
+      if (processedRoutes.alternativeRoutesLineData.length > 0) {
+        setAlternativeRoutesLineData(processedRoutes.alternativeRoutesLineData);
+      } else {
+        setAlternativeRoutesLineData([]);
+      }
 
       setActiveRoute(0);
       activeRouteRef.current = 0;
@@ -352,8 +315,10 @@ export default function SimulationPage() {
         // Choice of matching mode
         if (mapMatchRequest) {
           if (isUsingWasmRef.current) {
-            await wasmMapMatcher.loadTile(point.Latitude, point.Longitude);
-            const res = wasmMapMatcher.onlineMapMatch(
+            // Intentionally NOT awaited here so it runs asynchronously while onlineMapMatch continues
+            void wasmMapMatcher.loadTile(point.Latitude, point.Longitude);
+
+            const res = await wasmMapMatcher.onlineMapMatch(
               mapMatchRequest.gps_point,
               mapMatchRequest.k,
               mapMatchRequest.candidates,
@@ -583,58 +548,18 @@ export default function SimulationPage() {
                       reroute: true,
                       startEdgeId: currentEdgeID,
                     };
-                    const [newSpRouteData, alternativeRouteData] = await Promise.all([
-                      fetchRouteCRP(reqBody),
-                      fetchAlternativeRoutes(reqBody),
-                    ]);
+                    const processedRoutes = await routingWorker.fetchAndProcessRoutes(reqBody, true);
 
-                    newSpRouteData.data.distance = parseFloat(
-                      (newSpRouteData.data.distance / 1000).toFixed(2)
-                    );
-                    const newAlternatives = alternativeRouteData.data.alternative_routes;
-                    newAlternatives.forEach((alt: any) => {
-                      alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
-                    });
+                    setRouteData(processedRoutes.combinedRoutes);
+                    routeDataRef.current = processedRoutes.combinedRoutes;
 
-                    const combinedRoutes = [
-                      newSpRouteData.data,
-                      ...newAlternatives,
-                    ];
-
-                    setRouteData(combinedRoutes);
-                    routeDataRef.current = combinedRoutes;
-                    const coords = polyline.decode(newSpRouteData.data.path);
-                    const newLinedata: LineData = {
-                      type: "Feature",
-                      geometry: {
-                        type: "LineString",
-                        coordinates: coords.map((coord) => [coord[1], coord[0]]),
-                      },
-                    };
-                    setPolylineData(newLinedata);
-
-                    const alternativesPolyline = alternativeRouteData.data.alternative_routes.map((route) => {
-                      const coords = polyline.decode(route.path);
-                      return {
-                        type: "Feature",
-                        geometry: {
-                          type: "LineString",
-                          coordinates: coords.map((coord) => [coord[1], coord[0]]),
-                        },
-                      } as LineData;
-                    });
+                    setPolylineData(processedRoutes.mainLineData);
                     
-                    const dummyRoute: LineData = {
-                      type: "Feature",
-                      geometry: {
-                        type: "LineString",
-                        coordinates: [
-                          [-100, 40],
-                          [-100, 40],
-                        ],
-                      },
-                    };
-                    setAlternativeRoutesLineData([dummyRoute, ...alternativesPolyline]);
+                    if (processedRoutes.alternativeRoutesLineData.length > 0) {
+                      setAlternativeRoutesLineData(processedRoutes.alternativeRoutesLineData);
+                    } else {
+                      setAlternativeRoutesLineData([]);
+                    }
                     
                     // Reset active route to 0 after reroute
                     setActiveRoute(0);
@@ -827,7 +752,7 @@ export default function SimulationPage() {
                   const newVal = !isUsingWasm;
                   setIsUsingWasm(newVal);
                   isUsingWasmRef.current = newVal;
-                  if (newVal) wasmMapMatcher.init();
+                  if (newVal) void wasmMapMatcher.init();
                   toast.success(newVal ? "WASM enabled" : "WASM disabled");
                 }}
                 className="flex items-center gap-1.5 cursor-pointer"
