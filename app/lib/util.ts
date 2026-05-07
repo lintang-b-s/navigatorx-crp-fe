@@ -5,7 +5,10 @@ export function truncateString(str: string, maxLength: number = 30) {
   return str.slice(0, maxLength - 3) + "...";
 }
 
-export function getArrivalTime(etaMinutes: number, baseDate: Date = new Date()) {
+export function getArrivalTime(
+  etaMinutes: number,
+  baseDate: Date = new Date(),
+) {
   const arrivalDate = new Date(baseDate.getTime() + etaMinutes * 60 * 1000);
 
   let hours = arrivalDate.getHours();
@@ -34,7 +37,7 @@ export function haversineDistance(
   lat1: number,
   lon1: number,
   lat2: number,
-  lon2: number
+  lon2: number,
 ): number {
   const φ1 = toRadians(lat1);
   const φ2 = toRadians(lat2);
@@ -46,21 +49,54 @@ export function haversineDistance(
 
   return EARTH_RADIUS_KM * c;
 }
-// mercator
-export function project(lat: number, lon: number): { x: number; y: number } {
-  const R = 6378137;
-  const x = R * toRadians(lon);
-  const y = R * Math.log(Math.tan(Math.PI / 4 + toRadians(lat) / 2));
-  return { x, y };
+
+// https://wiki.openstreetmap.org/wiki/Mercator#JavaScript_(or_ActionScript)
+
+const PI = Math.PI;
+const RAD2DEG = 180 / PI;
+const DEG2RAD = PI / 180;
+const R = 6378137.0;
+
+function y2lat(y: number): number {
+  return (2 * Math.atan(Math.exp(y / R)) - PI / 2) * RAD2DEG;
+}
+function x2lon(x: number): number {
+  return RAD2DEG * (x / R);
 }
 
-export function mercatorDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function lat2y(lat: number): number {
+  return Math.log(Math.tan(PI / 4 + (lat * DEG2RAD) / 2)) * R;
+}
+function lon2x(lon: number): number {
+  return lon * DEG2RAD * R;
+}
+
+// spherical mercator
+export function project(lat: number, lon: number): { x: number; y: number } {
+  return { x: lon2x(lon), y: lat2y(lat) };
+}
+
+export function unproject(x: number, y: number): { lat: number; lon: number } {
+  return { lat: y2lat(y), lon: x2lon(x) };
+}
+
+export function mercatorDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   const p1 = project(lat1, lon1);
   const p2 = project(lat2, lon2);
   return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
 }
 
-export function mercatorDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+export function mercatorDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   return mercatorDistance(lat1, lon1, lat2, lon2) / 1000;
 }
 

@@ -674,6 +674,7 @@ export default function Home() {
             pos.coords.latitude,
             pos.coords.longitude,
           );
+
           const resp = wasmMapMatcher.onlineMapMatch(
             mapMatchRequest.gps_point,
             mapMatchRequest.k,
@@ -682,6 +683,7 @@ export default function Home() {
             mapMatchRequest.speed_std_k,
             mapMatchRequest.last_bearing,
           );
+          
           if (resp) handleMapMatchResponse({ data: resp });
 
           mapMatchStep.current += 1;
