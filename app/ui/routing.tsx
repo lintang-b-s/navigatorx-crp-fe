@@ -303,7 +303,10 @@ function showRouteResultMobile(
                 >
                   {props.isStartingNavigation ? (
                     <>
-                      <Spinner className="text-white" data-icon="inline-start" />
+                      <Spinner
+                        className="text-white"
+                        data-icon="inline-start"
+                      />
                       Starting
                     </>
                   ) : (
@@ -401,7 +404,10 @@ function showRouteResultMobile(
                 >
                   {props.isStartingNavigation ? (
                     <>
-                      <Spinner className="text-white" data-icon="inline-start" />
+                      <Spinner
+                        className="text-white"
+                        data-icon="inline-start"
+                      />
                       Starting
                     </>
                   ) : (
@@ -521,8 +527,8 @@ function showRouteResultMobile(
                 </p>
               </div>
               <p className="text-sm font-bold text-blue-400 line-clamp-1">
-                {(props.routeDataCRP?.[activeRoute]?.driving_directions?.length ??
-                  0) > 0
+                {(props.routeDataCRP?.[activeRoute]?.driving_directions
+                  ?.length ?? 0) > 0
                   ? props.routeDataCRP?.[activeRoute]?.driving_directions[
                       props.currentDirectionIndex
                     ]?.street_name
@@ -813,6 +819,7 @@ function showRouteDirectionsComponent(
           onClick={(e) => {
             toast.error(
               "Navigate feature only available on mobile device view! ",
+              { duration: 1000 },
             );
           }}
         >

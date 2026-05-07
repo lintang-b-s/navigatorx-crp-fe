@@ -179,7 +179,9 @@ export default function Home() {
       /^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/;
     const trimmedInput = input.trim();
     if (coordRegex.test(trimmedInput)) {
-      const [lat, lon] = trimmedInput.split(",").map((v) => parseFloat(v.trim()));
+      const [lat, lon] = trimmedInput
+        .split(",")
+        .map((v) => parseFloat(v.trim()));
       if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
         return { lat, lon };
       }
@@ -204,11 +206,13 @@ export default function Home() {
             });
           },
           (error) => {
-            toast.error(error.message);
+            toast.error(error.message, { duration: 2000 });
           },
         );
       } else {
-        toast.error("Geolocation is not supported by this browser.");
+        toast.error("Geolocation is not supported by this browser.", {
+          duration: 2000,
+        });
       }
 
       replace(`${pathname}`);
@@ -229,7 +233,7 @@ export default function Home() {
       if (!coords) {
         fetchSearch(source, userLoc.latitude, userLoc.longitude)
           .then((resp) => setSearchResults(resp.data))
-          .catch((e) => toast.error(e.message));
+          .catch((e) => toast.error(e.message, { duration: 1000 }));
         setShowResult(true);
       }
     }
@@ -239,7 +243,7 @@ export default function Home() {
       if (!coords) {
         fetchSearch(destination, userLoc.latitude, userLoc.longitude)
           .then((resp) => setSearchResults(resp.data))
-          .catch((e) => toast.error(e.message));
+          .catch((e) => toast.error(e.message, { duration: 1000 }));
         setShowResult(true);
       }
     }
@@ -290,7 +294,9 @@ export default function Home() {
     }
 
     if (!sourceLoc || !destinationLoc) {
-      toast.error("Please select both source and destination");
+      toast.error("Please select both source and destination", {
+        duration: 1000,
+      });
       return;
     }
 
@@ -317,20 +323,23 @@ export default function Home() {
         destLon: destinationLoc?.osm_object.lon!,
       };
 
-      const processedRoutes = await routingWorker.fetchAndProcessRoutes(reqBody, isAlternativeChecked);
-      
+      const processedRoutes = await routingWorker.fetchAndProcessRoutes(
+        reqBody,
+        isAlternativeChecked,
+      );
+
       setActiveRoute(0);
       setPolylineData(processedRoutes.mainLineData);
-      
+
       if (processedRoutes.alternativeRoutesLineData.length > 0) {
         setAlternativeRoutesLineData(processedRoutes.alternativeRoutesLineData);
       } else {
         setAlternativeRoutesLineData([]);
       }
-      
+
       setRouteData(processedRoutes.combinedRoutes);
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message, { duration: 800 });
     } finally {
       setIsFetchingRoutes(false);
     }
@@ -366,7 +375,7 @@ export default function Home() {
         pushParam("destination", newUserLoc);
       }
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message, { duration: 1000 });
     }
   };
 
@@ -453,7 +462,7 @@ export default function Home() {
   useEffect(() => {
     if (routeStarted) {
       if (!("geolocation" in navigator)) {
-        toast.error("Geolocation not supported");
+        toast.error("Geolocation not supported", { duration: 1000 });
         return;
       }
 
@@ -576,7 +585,7 @@ export default function Home() {
 
           setSnappedEdgeID(resp.data.matched_gps_point.edge_id);
         } catch (err) {
-          toast.error("Failed to process map match result");
+          toast.error("Failed to process map match result", { duration: 800 });
         }
       };
 
@@ -636,7 +645,10 @@ export default function Home() {
           };
 
           // Intentionally NOT awaited here so it runs asynchronously while onlineMapMatch continues
-          void wasmMapMatcher.loadTile(pos.coords.latitude, pos.coords.longitude);
+          void wasmMapMatcher.loadTile(
+            pos.coords.latitude,
+            pos.coords.longitude,
+          );
 
           const resp = await wasmMapMatcher.onlineMapMatch(
             mapMatchRequest.gps_point,
@@ -646,7 +658,7 @@ export default function Home() {
             mapMatchRequest.speed_std_k,
             mapMatchRequest.last_bearing,
           );
-          
+
           if (resp) handleMapMatchResponse({ data: resp });
 
           mapMatchStep.current += 1;
@@ -779,7 +791,11 @@ export default function Home() {
           // When rerouting, we often want to skip the initial "Head [Direction]" instruction at index 0
           // and show the first real turn maneuver instead.
           let targetIndex = directionsIndex;
-          if (mapMatchStep.current > 1 && targetIndex === 0 && usedRouteDirections.length > 1) {
+          if (
+            mapMatchStep.current > 1 &&
+            targetIndex === 0 &&
+            usedRouteDirections.length > 1
+          ) {
             targetIndex = 1;
           }
 
@@ -791,8 +807,7 @@ export default function Home() {
 
           // 2. Calculate distance to the next turn point (the "X meters to turn" number).
           const nextTurnPoint =
-            targetIndex >= 0 &&
-            usedRouteDirections[targetIndex]?.turn_point
+            targetIndex >= 0 && usedRouteDirections[targetIndex]?.turn_point
               ? usedRouteDirections[targetIndex].turn_point
               : {
                   lat: destinationLoc?.osm_object.lat ?? 0,
@@ -1021,6 +1036,7 @@ export default function Home() {
             isOffTheRoute = false;
             toast.success(
               `Switched to alternative route ${otherRouteIndex + 1}`,
+              { duration: 800 },
             );
           }
         }
@@ -1041,13 +1057,18 @@ export default function Home() {
               reroute: true,
               startEdgeId: snappedEdgeID,
             };
-            const processedRoutes = await routingWorker.fetchAndProcessRoutes(reqBody, true);
+            const processedRoutes = await routingWorker.fetchAndProcessRoutes(
+              reqBody,
+              true,
+            );
 
             setRouteData(processedRoutes.combinedRoutes);
             routeDataRef.current = processedRoutes.combinedRoutes;
 
             setPolylineData(processedRoutes.mainLineData);
-            setAlternativeRoutesLineData(processedRoutes.alternativeRoutesLineData);
+            setAlternativeRoutesLineData(
+              processedRoutes.alternativeRoutesLineData,
+            );
 
             // Reset active route to 0 after reroute
             setActiveRoute(0);
@@ -1059,6 +1080,7 @@ export default function Home() {
           } catch (e: any) {
             toast.error(
               `Failed to fetch route (re-routing): ${e?.message ?? "Unknown error"}`,
+              { duration: 800 },
             );
           } finally {
             isReroutingRef.current = false;
