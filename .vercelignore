@@ -1,0 +1,12 @@
+node_modules
+data
+.next
+out
+build
+dataexclude
+scratch
+*.log
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

@@ -45,8 +45,9 @@ export const SearchBox = React.memo(function SearchBox({
   const parseCoordinates = (input: string) => {
     const coordRegex =
       /^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/;
-    if (coordRegex.test(input)) {
-      const [lat, lon] = input.split(",").map((v) => parseFloat(v.trim()));
+    const trimmedInput = input.trim();
+    if (coordRegex.test(trimmedInput)) {
+      const [lat, lon] = trimmedInput.split(",").map((v) => parseFloat(v.trim()));
       if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
         return { lat, lon };
       }

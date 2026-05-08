@@ -24,6 +24,10 @@ export function isUserOffTheRoute({
   return true;
 }
 
+/**
+ * Resolves which driving direction instruction (e.g., "Turn Left") matches the user's current road.
+ * It searches through the driving directions array to find a segment that contains the current snappedEdgeID.
+ */
 export function getCurrentUserDirectionIndex({
   snappedEdgeID,
   drivingDirections,
@@ -31,21 +35,24 @@ export function getCurrentUserDirectionIndex({
   snappedEdgeID: number;
   drivingDirections: Direction[];
 }): number {
-  let directionIndex = 0;
+  if (snappedEdgeID === -1) return 0;
+
   for (let i = 0; i < drivingDirections.length; i++) {
     const direction = drivingDirections[i];
     for (let j = 0; j < direction.edge_ids.length; j++) {
       const directionEdgeID = direction.edge_ids[j];
       if (snappedEdgeID === directionEdgeID) {
-        directionIndex = i;
-        break;
+        return i;
       }
     }
   }
 
-  return directionIndex;
+  return 0;
 }
 
+/**
+ * Calculates the real-world distance (in KM) from the user to the point where they need to perform a turn.
+ */
 export function getDistanceFromUserToNextTurn({
   matchedGpsLoc,
   nextTurnPoint,
@@ -63,6 +70,12 @@ export function getDistanceFromUserToNextTurn({
     nextTurnPoint.lon
   );
 }
+
+/**
+ * Checks if the user is approaching a "Decision Point" where alternative routes should be suggested.
+ * This is triggered based on a specific 'suggest_alternatives' flag in the route data 
+ * and a proximity to the end of the current step.
+ */
 export function isNearEndOfSuggestAlternativesStep({
   snappedEdgeID,
   drivingDirections,

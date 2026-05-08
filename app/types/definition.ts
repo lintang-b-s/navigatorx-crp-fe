@@ -24,6 +24,7 @@ export type RouterProps = {
   routeDataCRP?: RouteCRPResponse[];
   activeRoute: number;
   routeStarted: boolean;
+  isStartingNavigation?: boolean;
   handleRouteClick: (index: number) => void;
   handleDirectionActive: (show: boolean) => void;
   handleSetNextTurnIndex: (index: number) => void;
@@ -40,6 +41,9 @@ export type RouterProps = {
   onSelectSource: (place: Place) => void;
   onSelectDestination: (place: Place) => void;
   ignoreDistanceCheck?: boolean;
+  timeSpent?: number;
+  distanceTraveled?: number;
+  speed?: number;
 };
 
 export type SearchSelectorProps = {
@@ -66,6 +70,7 @@ export type MapComponentProps = {
   isSimulation?: boolean;
   currentGpsLocRef?: React.RefObject<Coord | null>;
   currentHeadingRef?: React.RefObject<number>;
+  triggerGeolocate?: number;
 };
 
 export type LineData = {

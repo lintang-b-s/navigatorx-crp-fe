@@ -1,5 +1,8 @@
 import axios from "axios";
 
+/**
+ * A single step in the navigation instructions (e.g., "Turn Left onto Main St").
+ */
 export interface Direction {
   instruction: string;
   turn_point: {
@@ -7,15 +10,18 @@ export interface Direction {
     lon: number;
   };
   street_name: string;
-  travel_time: number;
-  distance: number;
-  edge_ids: number[];
+  travel_time: number; // Duration of this specific segment in minutes
+  distance: number;    // Distance of this specific segment in Kilometers
+  edge_ids: number[];  // OSM Edge IDs making up this road
   polyline: string;
   turn_bearing: number;
   turn_type: string;
-  suggest_alternatives?: boolean;
+  suggest_alternatives?: boolean; // Indicates if the backend recommends checking alternatives here
 }
 
+/**
+ * Enhanced direction interface with cumulative progress used for UI listing.
+ */
 export interface CumulativeDirection extends Direction {
   cumulativeEta: number;
   cumulativeDistance: number;

@@ -10,23 +10,20 @@ import {
   Layer,
   NavigationControl,
   Popup,
+  AttributionControl,
 } from "@vis.gl/react-maplibre";
 // @ts-ignore
 import "maplibre-gl/dist/maplibre-gl.css"; // See notes below
 import { useEffect, useMemo, useState, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import toast from "react-hot-toast";
+
 import { LineData, MapComponentProps } from "../types/definition";
-import Image from "next/image";
+
 import { IoLocationSharp } from "react-icons/io5";
-import { FaLocationArrow } from "react-icons/fa";
-import polyline from "@mapbox/polyline";
-import {
-  fetchAlternativeRoutes,
-  fetchRouteCRP,
-  fetchBoundingBox,
-} from "../lib/navigatorxApi";
-import { haversineDistance } from "../lib/util";
+
+import { fetchBoundingBox } from "../lib/navigatorxApi";
+import { TileMath } from "../lib/azure_maps_zoom_tiles";
+import { project, unproject } from "../lib/util";
 
 const ACTIVE_ROUTE_COLOR = "#470DF9";
 const ACTIVE_ROUTE_OPACITY = 0.9;
@@ -63,6 +60,7 @@ export const MapComponent = React.memo(function MapComponent({
   isSimulation,
   currentGpsLocRef,
   currentHeadingRef,
+  triggerGeolocate,
 }: MapComponentProps) {
   const [contextMenuCoord, setContextMenuCoord] = useState<{
     lng: number;
@@ -85,6 +83,14 @@ export const MapComponent = React.memo(function MapComponent({
     bearing: 0,
     pitch: 0,
   });
+
+  const geolocateControlRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (triggerGeolocate && geolocateControlRef.current) {
+      geolocateControlRef.current.trigger();
+    }
+  }, [triggerGeolocate]);
 
   useEffect(() => {
     const getBoundingBox = async () => {
@@ -248,6 +254,7 @@ export const MapComponent = React.memo(function MapComponent({
         setViewState(evt.viewState);
       }}
       mapStyle="https://tiles.openfreemap.org/styles/liberty"
+      attributionControl={false}
       onContextMenu={(evt) => {
         evt.preventDefault();
         setContextMenuCoord({ lng: evt.lngLat.lng, lat: evt.lngLat.lat });
@@ -265,6 +272,7 @@ export const MapComponent = React.memo(function MapComponent({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      <AttributionControl compact={true} />
       {gpsWindowGeoJSON && (
         <Source id="gps-window-source" type="geojson" data={gpsWindowGeoJSON}>
           <Layer
@@ -308,47 +316,39 @@ export const MapComponent = React.memo(function MapComponent({
         </Source>
       )}
 
-      {!routeStarted ? (
-        <>
-          <GeolocateControl
-            position="bottom-right"
-            positionOptions={{ enableHighAccuracy: true }}
-            onGeolocate={(e) => {
-              onUserLocationUpdateHandler(
-                e.coords.latitude,
-                e.coords.longitude,
-              );
-              setViewState((prev) => ({
-                ...prev,
-                latitude: e.coords.latitude,
-                longitude: e.coords.longitude,
-                zoom: 17,
-              }));
-            }}
-            showAccuracyCircle={!routeStarted}
-            showUserLocation={!routeStarted}
-          />
-          <NavigationControl position="bottom-right" />
-        </>
-      ) : (
-        <>
-          <GeolocateControl
-            style={{ position: "absolute", bottom: "100px", right: "5px" }}
-            positionOptions={{ enableHighAccuracy: true }}
-            onGeolocate={(e) => {
-              onUserLocationUpdateHandler(
-                e.coords.latitude,
-                e.coords.longitude,
-              );
-            }}
-            showAccuracyCircle={false}
-            showUserLocation={false}
-          />
-          <NavigationControl
-            style={{ position: "absolute", bottom: "140px", right: "5px" }}
-          />
-        </>
-      )}
+      <GeolocateControl
+        ref={geolocateControlRef}
+        position="bottom-right"
+        style={routeStarted ? { marginBottom: "50px" } : {}}
+        positionOptions={{ enableHighAccuracy: true }}
+        onGeolocate={(e) => {
+          onUserLocationUpdateHandler(e.coords.latitude, e.coords.longitude);
+          if (!routeStarted) {
+            setViewState((prev) => ({
+              ...prev,
+              latitude: e.coords.latitude,
+              longitude: e.coords.longitude,
+              zoom: 17,
+            }));
+          } else if (currentGpsLocRef?.current && mapRef.current) {
+            mapRef.current.jumpTo({
+              center: [
+                currentGpsLocRef.current.lon,
+                currentGpsLocRef.current.lat,
+              ],
+              zoom: 17,
+              bearing: currentHeadingRef?.current || 0,
+            });
+            mapRef.current.fire("resume-tracking");
+          }
+        }}
+        showAccuracyCircle={true}
+        showUserLocation={true}
+      />
+      <NavigationControl
+        position="bottom-right"
+        style={routeStarted ? { marginBottom: "30px" } : {}}
+      />
 
       {/* show shortest path route on below of active route  if sp path not activeRoute*/}
       {!isDirectionActive && activeRoute != 0 && spRouteGeoJSON && (
@@ -542,7 +542,7 @@ export const MapComponent = React.memo(function MapComponent({
             type="line"
             source="bounding-box"
             paint={{
-              "line-color": "#2B7FFF",
+              "line-color": ACTIVE_ROUTE_COLOR,
               "line-width": 5,
             }}
           />
@@ -578,6 +578,21 @@ function getTurnIconDirection(turnType: string): string {
   return "";
 }
 
+function scalarProjection(
+  dx: number,
+  dy: number,
+  dx0: number,
+  dy0: number,
+): number {
+  const roadNorm = dx * dx + dy * dy;
+
+  let t = 0;
+  if (roadNorm > 0) {
+    t = Math.max(0, Math.min(1, (dx0 * dx + dy0 * dy) / roadNorm));
+  }
+  return t;
+}
+
 function findClosestPointOnRoute(
   lon: number,
   lat: number,
@@ -587,44 +602,37 @@ function findClosestPointOnRoute(
     return [lon, lat];
   }
 
-  const R = 6371e3; // Earth radius in meters
-  const lat1 = (lat * Math.PI) / 180;
-  const cosLat = Math.cos(lat1);
+  const p0 = project(lat, lon);
 
   let minDistance = Number.POSITIVE_INFINITY;
   let closestPoint: [number, number] = [lon, lat];
 
   for (let i = 0; i < coordinates.length - 1; i++) {
-    const p1 = coordinates[i];
-    const p2 = coordinates[i + 1];
+    const c1 = coordinates[i];
+    const c2 = coordinates[i + 1];
 
-    // Convert degrees to approximate local meters
-    const x1 = p1[0] * cosLat * R;
-    const y1 = p1[1] * R;
-    const x2 = p2[0] * cosLat * R;
-    const y2 = p2[1] * R;
-    const x0 = lon * cosLat * R;
-    const y0 = lat * R;
+    const p1 = project(c1[1], c1[0]);
+    const p2 = project(c2[1], c2[0]);
 
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const dx0 = x0 - x1;
-    const dy0 = y0 - y1;
+    // c1->c2 vector
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
 
-    const lenSq = dx * dx + dy * dy;
-    let t = 0;
-    if (lenSq > 0) {
-      t = Math.max(0, Math.min(1, (dx0 * dx + dy0 * dy) / lenSq));
-    }
+    // c1 -> turn_point vector
+    const dx0 = p0.x - p1.x;
+    const dy0 = p0.y - p1.y;
 
-    const projX = x1 + t * dx;
-    const projY = y1 + t * dy;
+    const t = scalarProjection(dx, dy, dx0, dy0);
 
-    const distSq = (x0 - projX) ** 2 + (y0 - projY) ** 2;
+    const projX = p1.x + t * dx;
+    const projY = p1.y + t * dy;
+
+    const distSq = (p0.x - projX) ** 2 + (p0.y - projY) ** 2;
     if (distSq < minDistance) {
       minDistance = distSq;
       // Interpolate the exact closest point on the segment
-      closestPoint = [p1[0] + t * (p2[0] - p1[0]), p1[1] + t * (p2[1] - p1[1])];
+      const foot = unproject(projX, projY);
+      closestPoint = [foot.lon, foot.lat];
     }
   }
 
@@ -656,37 +664,25 @@ function getRouteFittedViewState(coordinates: number[][]): {
     ],
   );
 
-  const centerLon = (minLon + maxLon) / 2;
-  const centerLat = (minLat + maxLat) / 2;
-
   const mapWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
   const mapHeight = typeof window !== "undefined" ? window.innerHeight : 768;
-  const padding = 120;
+  const padding = 20;
 
-  const safeWidth = Math.max(1, mapWidth - padding * 2);
-  const safeHeight = Math.max(1, mapHeight - padding * 2);
-
-  const lngDiff = Math.max(0.0001, maxLon - minLon);
-  const zoomLng = Math.log2((360 * safeWidth) / (lngDiff * 256));
-
-  const latFraction = Math.max(
-    0.0001,
-    (latToMercator(maxLat) - latToMercator(minLat)) / Math.PI,
+  const { center, zoom } = TileMath.BestMapView(
+    [minLon, minLat, maxLon, maxLat],
+    mapWidth,
+    mapHeight,
+    padding,
+    512, // tileSize
+    20, // maxZoom
+    true, // allowFloatZoom
   );
-  const zoomLat = Math.log2(safeHeight / (256 * latFraction));
-
-  const zoom = Math.max(9, Math.min(16, Math.min(zoomLng, zoomLat)));
 
   return {
-    longitude: centerLon,
-    latitude: centerLat,
-    zoom,
+    longitude: center[0],
+    latitude: center[1],
+    zoom: zoom,
   };
-}
-
-function latToMercator(lat: number): number {
-  const sin = Math.sin((lat * Math.PI) / 180);
-  return Math.log((1 + sin) / (1 - sin)) / 2;
 }
 
 const ImperativeNavigationMarker = ({
@@ -707,7 +703,7 @@ const ImperativeNavigationMarker = ({
 
     const el = document.createElement("div");
     el.className =
-      "bg-[#F7FBFA]/50 flex items-center justify-center rounded-full w-[50px] h-[50px]";
+      "bg-[#F7FBFA]/80 flex items-center justify-center rounded-full w-[50px] h-[50px]";
     const img = document.createElement("img");
     img.src = "/navigation_material.svg";
     img.alt = "navigation icon";
@@ -732,6 +728,9 @@ const ImperativeNavigationMarker = ({
     let frameId: number;
     let isUserInteracting = false;
     let interactionTimeout: NodeJS.Timeout;
+    let lastLon = Number.NaN;
+    let lastLat = Number.NaN;
+    let lastHeading = Number.NaN;
 
     const onUserInteractionStart = () => {
       isUserInteracting = true;
@@ -745,22 +744,38 @@ const ImperativeNavigationMarker = ({
       }, 3000); // Resume tracking after 3 seconds of inactivity
     };
 
-    mapInstance.on('dragstart', onUserInteractionStart);
-    mapInstance.on('zoomstart', onUserInteractionStart);
-    mapInstance.on('pitchstart', onUserInteractionStart);
-    mapInstance.on('dragend', onUserInteractionEnd);
-    mapInstance.on('zoomend', onUserInteractionEnd);
-    mapInstance.on('pitchend', onUserInteractionEnd);
+    const onResumeTracking = () => {
+      isUserInteracting = false;
+      clearTimeout(interactionTimeout);
+    };
+
+    mapInstance.on("dragstart", onUserInteractionStart);
+    mapInstance.on("zoomstart", onUserInteractionStart);
+    mapInstance.on("pitchstart", onUserInteractionStart);
+    mapInstance.on("dragend", onUserInteractionEnd);
+    mapInstance.on("zoomend", onUserInteractionEnd);
+    mapInstance.on("pitchend", onUserInteractionEnd);
+    mapInstance.on("resume-tracking", onResumeTracking);
 
     const update = () => {
       if (currentGpsLocRef.current && markerRef.current) {
         const newLon = currentGpsLocRef.current.lon;
         const newLat = currentGpsLocRef.current.lat;
         const newHeading = currentHeadingRef.current || 0;
+        const positionChanged = newLon !== lastLon || newLat !== lastLat;
+        const headingChanged = newHeading !== lastHeading;
 
-        if (newLon !== 0 && newLat !== 0) {
-          markerRef.current.setLngLat([newLon, newLat]);
-          markerRef.current.setRotation(newHeading);
+        if (newLon !== 0 && newLat !== 0 && (positionChanged || headingChanged)) {
+          if (positionChanged) {
+            markerRef.current.setLngLat([newLon, newLat]);
+            lastLon = newLon;
+            lastLat = newLat;
+          }
+
+          if (headingChanged) {
+            markerRef.current.setRotation(newHeading);
+            lastHeading = newHeading;
+          }
 
           if (!isUserInteracting) {
             mapInstance.jumpTo({
@@ -772,7 +787,7 @@ const ImperativeNavigationMarker = ({
                 bottom: 0,
                 left: 0,
                 right: 0,
-              }
+              },
             });
           }
         }
@@ -784,12 +799,13 @@ const ImperativeNavigationMarker = ({
     return () => {
       cancelAnimationFrame(frameId);
       clearTimeout(interactionTimeout);
-      mapInstance.off('dragstart', onUserInteractionStart);
-      mapInstance.off('zoomstart', onUserInteractionStart);
-      mapInstance.off('pitchstart', onUserInteractionStart);
-      mapInstance.off('dragend', onUserInteractionEnd);
-      mapInstance.off('zoomend', onUserInteractionEnd);
-      mapInstance.off('pitchend', onUserInteractionEnd);
+      mapInstance.off("dragstart", onUserInteractionStart);
+      mapInstance.off("zoomstart", onUserInteractionStart);
+      mapInstance.off("pitchstart", onUserInteractionStart);
+      mapInstance.off("dragend", onUserInteractionEnd);
+      mapInstance.off("zoomend", onUserInteractionEnd);
+      mapInstance.off("pitchend", onUserInteractionEnd);
+      mapInstance.off("resume-tracking", onResumeTracking);
       if (markerRef.current) {
         markerRef.current.remove();
         markerRef.current = null;
