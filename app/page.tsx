@@ -594,26 +594,27 @@ export default function Home() {
           const currentTime = new Date();
           deadReckoning.current = false;
           let deltaTime: number = 0;
-          let speed = 0.0;
+          let distance = 0;
 
-          let distance = 1;
-          if (pos.coords.speed !== null && pos.coords.speed !== undefined) {
-            speed = pos.coords.speed;
-          } else if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
+          if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
             deltaTime =
               (currentTime.getTime() -
-                (prevGps.current?.time?.getTime() ?? 0)) /
+                (prevGps.current.time.getTime())) /
               1000.0;
             distance =
               haversineDistance(
-                prevGps.current?.lat ?? 0,
-                prevGps.current?.lon ?? 0,
+                prevGps.current.lat,
+                prevGps.current.lon,
                 pos.coords.latitude,
                 pos.coords.longitude,
               ) * 1000; //meter
-            if (deltaTime > 0) {
-              speed = distance / deltaTime; // meter/s
-            }
+          }
+
+          let speed = 0.0;
+          if (pos.coords.speed !== null && pos.coords.speed !== undefined) {
+            speed = pos.coords.speed;
+          } else if (deltaTime > 0) {
+            speed = distance / deltaTime; // meter/s
           }
 
           currentGps = {
