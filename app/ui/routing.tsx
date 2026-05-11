@@ -192,6 +192,7 @@ export const Router = React.memo(function Router(props: RouterProps) {
           </div>
 
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={(e) => {
               props.onHandleReverseGeocoding(e, props.isSourceFocused);
             }}
@@ -419,54 +420,54 @@ function showRouteResultMobile(
               )}
 
               {props.routeDataCRP?.map((route, index) => (
+                <div
+                  key={`route-${index}`}
+                  className={`flex flex-row items-center border-t-[1px] ${
+                    index == props.routeDataCRP!.length - 1
+                      ? "border-b-[1px]"
+                      : ""
+                  }  border-[#D3DAE0] cursor-pointer group `}
+                  onClick={() => {
+                    handleRouteClick(index);
+                  }}
+                >
                   <div
-                    key={`route-${index}`}
-                    className={`flex flex-row items-center border-t-[1px] ${
-                      index == props.routeDataCRP!.length - 1
-                        ? "border-b-[1px]"
-                        : ""
-                    }  border-[#D3DAE0] cursor-pointer group `}
-                    onClick={() => {
-                      handleRouteClick(index);
-                    }}
-                  >
-                    <div
-                      className={`w-1  h-full mr-4 ${
-                        activeRoute == index && "bg-blue-500"
-                      }  group-hover:bg-[#B7BABF]`}
-                    ></div>
-                    <div className="flex flex-col  py-2 gap-2  justify-start">
-                      <p className="text-xs font-semibold  ">
-                        <span className="text-lg font-bold">
-                          {formatTime(route.travel_time)} Menit
-                        </span>
-                        <span>&nbsp;&nbsp;&nbsp;</span>
-                        Tiba pada{" "}
-                        {nowTime
-                          ? getArrivalTime(route.travel_time, nowTime)
-                          : "--:--"}{" "}
-                      </p>
-                      <p className="text-sm text-[#4C4C4C] ">
-                        {formatDistance(route.distance)} KM
-                      </p>
-                    </div>
+                    className={`w-1  h-full mr-4 ${
+                      activeRoute == index && "bg-blue-500"
+                    }  group-hover:bg-[#B7BABF]`}
+                  ></div>
+                  <div className="flex flex-col  py-2 gap-2  justify-start">
+                    <p className="text-xs font-semibold  ">
+                      <span className="text-lg font-bold">
+                        {formatTime(route.travel_time)} Menit
+                      </span>
+                      <span>&nbsp;&nbsp;&nbsp;</span>
+                      Tiba pada{" "}
+                      {nowTime
+                        ? getArrivalTime(route.travel_time, nowTime)
+                        : "--:--"}{" "}
+                    </p>
+                    <p className="text-sm text-[#4C4C4C] ">
+                      {formatDistance(route.distance)} KM
+                    </p>
+                  </div>
 
-                    <button
-                      className={`flex ml-4 py-1 items-center rounded-lg bg-blue-500 px-2 
+                  <button
+                    className={`flex ml-4 py-1 items-center rounded-lg bg-blue-500 px-2 
                     text-sm font-mRouteedium text-white transition-colors
                      hover:bg-blue-400 focus-visible:outline 
                        focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                        cursor-pointer aria-disabled:opacity-50 space-x-2 mr-2`}
-                      onClick={(_e) => {
-                        handleShowDirections(true);
-                        props.handleDirectionActive(true);
-                      }}
-                    >
-                      <p>Show Directions</p>
-                      <FaLocationArrow size={20} color="white" />
-                    </button>
-                  </div>
-                ))}
+                    onClick={(_e) => {
+                      handleShowDirections(true);
+                      props.handleDirectionActive(true);
+                    }}
+                  >
+                    <p>Show Directions</p>
+                    <FaLocationArrow size={20} color="white" />
+                  </button>
+                </div>
+              ))}
             </div>
           )
         ) : (

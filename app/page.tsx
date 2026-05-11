@@ -138,7 +138,11 @@ export default function Home() {
   const [isAlternativeChecked, setIsAlternativeChecked] = useState(false);
   const [isFetchingRoutes, setIsFetchingRoutes] = useState(false);
 
+  const [lastFocused, setLastFocused] = useState<"source" | "destination" | null>(
+    null
+  );
   const [showResult, setShowResult] = useState(false);
+
   const [nextTurnIndex, setNextTurnIndex] = useState(-1);
   const pathname = usePathname();
 
@@ -277,7 +281,14 @@ export default function Home() {
 
   const handleFocusSourceSearch = useCallback((val: boolean) => {
     setIsSourceFocused(val);
+    if (val) setLastFocused("source");
   }, []);
+
+  const handleFocusDestinationSearch = useCallback((val: boolean) => {
+    setIsDestinationFocused(val);
+    if (val) setLastFocused("destination");
+  }, []);
+
 
   const onHandleGetRoutes = async (
     e: MouseEvent<HTMLButtonElement, MouseEvent>,
@@ -361,13 +372,16 @@ export default function Home() {
         },
         distance: 0,
       };
-      if (isSource) {
+      const target = isSource ? "source" : isDestinationFocused ? "destination" : lastFocused;
+
+      if (target === "source") {
         setSourceLoc(newUserLoc);
         pushParam("source", newUserLoc);
       } else {
         setDestinationLoc(newUserLoc);
         pushParam("destination", newUserLoc);
       }
+
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error(message, { duration: 1000 });
@@ -1118,7 +1132,8 @@ export default function Home() {
       />
       <Router
         sourceSearchActive={handleFocusSourceSearch}
-        destinationSearchActive={setIsDestinationFocused}
+        destinationSearchActive={handleFocusDestinationSearch}
+
         onHandleGetRoutes={onHandleGetRoutes}
         isFetchingRoutes={isFetchingRoutes}
         isSourceFocused={isSourceFocused}
