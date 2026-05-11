@@ -2,29 +2,15 @@
 import dynamic from "next/dynamic";
 import { Router } from "@/app/ui/routing";
 import { SearchResults } from "./ui/searchResult";
-import {
-  MouseEvent,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { fetchReverseGeocoding, fetchSearch, Place } from "@/app/lib/searchApi";
 import { routingWorker } from "@/app/lib/routingWorkerProxy";
 import toast from "react-hot-toast";
-import {
-  AlternativeRoutesResponse,
-  fetchAlternativeRoutes,
-  fetchRouteCRP,
-  RouteCRPResponse,
-  RouteCRPResponseWrapper,
-} from "./lib/navigatorxApi";
+import { fetchAlternativeRoutes, RouteCRPResponse } from "./lib/navigatorxApi";
 import polyline from "@mapbox/polyline";
 import { LineData } from "./types/definition";
-import { Candidate, Coord, Gps, MapMatchRequest } from "./lib/mapmatchApi";
+import { Candidate, Coord, Gps, MapMatchRequest, MapMatchResponse } from "./lib/mapmatchApi";
 import { haversineDistance, mercatorDistance } from "./lib/util";
 import {
   getCurrentUserDirectionIndex,
@@ -32,7 +18,7 @@ import {
   isUserOffTheRoute,
   isNearEndOfSuggestAlternativesStep,
 } from "./lib/routing";
-import { useDeviceOrientation } from "./hook";
+
 import {
   THROTTLE_DISTANCE_THRESHOLD,
   INVALID_LAT,
@@ -98,10 +84,6 @@ export default function Home() {
   const isInitialReroutePerformed = useRef<boolean>(false);
   const lastFetchedAlternativesStep = useRef<number>(-1);
   const hasArrived = useRef(false);
-
-  // real-time map matching states
-  const { orientation, requestAccess, revokeAccess, error } =
-    useDeviceOrientation();
 
   const [snappedEdgeID, setSnappedEdgeID] = useState<number>(-1);
   const [routeStarted, setRouteStarted] = useState(false);
@@ -189,14 +171,14 @@ export default function Home() {
     return null;
   }, []);
 
-  const onMapClick = useCallback((lat: number, lon: number) => {
+  const onMapClick = useCallback((_l: number, _ln: number) => {
     // Handle map click if needed
   }, []);
 
-  const { replace } = useRouter();
+  const router = useRouter();
   // search useffect
   useEffect(() => {
-    const init = async () => {
+    const init = () => {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
@@ -215,26 +197,22 @@ export default function Home() {
         });
       }
 
-      replace(`${pathname}`);
+      router.replace(`${pathname}`);
     };
 
     init();
-  }, []);
+  }, [pathname, router]);
 
   useEffect(() => {
-    if (
-      !(isSourceFocused && source) &&
-      !(isDestinationFocused && destination)
-    ) {
-      setShowResult(false);
-    }
     if (isSourceFocused && source) {
       const coords = parseCoordinates(source);
       if (!coords) {
         fetchSearch(source, userLoc.latitude, userLoc.longitude)
-          .then((resp) => setSearchResults(resp.data))
+          .then((resp) => {
+            setSearchResults(resp.data);
+            setShowResult(true);
+          })
           .catch((e) => toast.error(e.message, { duration: 1000 }));
-        setShowResult(true);
       }
     }
 
@@ -242,12 +220,27 @@ export default function Home() {
       const coords = parseCoordinates(destination);
       if (!coords) {
         fetchSearch(destination, userLoc.latitude, userLoc.longitude)
-          .then((resp) => setSearchResults(resp.data))
+          .then((resp) => {
+            setSearchResults(resp.data);
+            setShowResult(true);
+          })
           .catch((e) => toast.error(e.message, { duration: 1000 }));
-        setShowResult(true);
       }
     }
-  }, [isSourceFocused, searchParams, isDestinationFocused]);
+  }, [
+    isSourceFocused,
+    searchParams,
+    isDestinationFocused,
+    destination,
+    parseCoordinates,
+    source,
+    userLoc.latitude,
+    userLoc.longitude,
+  ]);
+
+  // Derived state for search result visibility
+  const isAnythingFocused = (isSourceFocused && !!source) || (isDestinationFocused && !!destination);
+  const actualShowResult = isAnythingFocused && showResult;
 
   const pushParam = useCallback(
     (key: "source" | "destination", place: Place) => {
@@ -258,9 +251,9 @@ export default function Home() {
           place.osm_object.address != "" ? `, ${place.osm_object.address}` : ""
         }`,
       );
-      replace(`${pathname}?${p.toString()}`);
+      router.replace(`${pathname}?${p.toString()}`);
     },
-    [searchParams, pathname, replace],
+    [searchParams, pathname, router],
   );
 
   const handleClickAlternativeCheckbox = useCallback(() => {
@@ -317,10 +310,10 @@ export default function Home() {
       });
       lastFetchedAlternativesStep.current = -1;
       const reqBody = {
-        srcLat: sourceLoc?.osm_object.lat!,
-        srcLon: sourceLoc?.osm_object.lon!,
-        destLat: destinationLoc?.osm_object.lat!,
-        destLon: destinationLoc?.osm_object.lon!,
+        srcLat: sourceLoc.osm_object.lat,
+        srcLon: sourceLoc.osm_object.lon,
+        destLat: destinationLoc.osm_object.lat,
+        destLon: destinationLoc.osm_object.lon,
       };
 
       const processedRoutes = await routingWorker.fetchAndProcessRoutes(
@@ -338,8 +331,9 @@ export default function Home() {
       }
 
       setRouteData(processedRoutes.combinedRoutes);
-    } catch (error: any) {
-      toast.error(error.message, { duration: 800 });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(message, { duration: 800 });
     } finally {
       setIsFetchingRoutes(false);
     }
@@ -374,8 +368,9 @@ export default function Home() {
         setDestinationLoc(newUserLoc);
         pushParam("destination", newUserLoc);
       }
-    } catch (error: any) {
-      toast.error(error.message, { duration: 1000 });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(message, { duration: 1000 });
     }
   };
 
@@ -418,7 +413,7 @@ export default function Home() {
         if (startLat !== undefined && startLon !== undefined) {
           await wasmMapMatcher.loadTile(startLat, startLon);
         }
-      } catch (error) {
+      } catch (_e) {
         setIsDirectionActive(false);
         return;
       } finally {
@@ -444,7 +439,7 @@ export default function Home() {
         candidates.current = [];
       }
     } else {
-      // Clear navigation state on stop
+      // STOP navigation logic
       setNavigationState({
         matchedGpsLoc: undefined,
         matchedHeading: 0,
@@ -453,6 +448,19 @@ export default function Home() {
         timeSpent: 0,
         distanceTraveled: 0,
       });
+      setSnappedEdgeID(0);
+      
+      // Reset internal navigation refs/state
+      mapMatchStep.current = 1;
+      candidates.current = [];
+      speedMeanK.current = DEFAULT_CONSTANT_SPEED;
+      speedStdK.current = DEFAULT_CONSTANT_SPEED;
+      lastBearing.current = 0.0;
+      prevGps.current = undefined;
+      deadReckoning.current = false;
+      isInitialReroutePerformed.current = false;
+      currentGpsLocRef.current = null;
+      currentHeadingRef.current = 0;
     }
     hasArrived.current = false;
     setRouteStarted(start);
@@ -471,7 +479,7 @@ export default function Home() {
       let prevTime: Date = new Date();
       let currentGps: Gps;
 
-      const handleMapMatchResponse = (resp: any) => {
+      const handleMapMatchResponse = (resp: MapMatchResponse) => {
         try {
           if (
             resp.data.matched_gps_point.matched_coord.lat == INVALID_LAT &&
@@ -584,7 +592,7 @@ export default function Home() {
           }
 
           setSnappedEdgeID(resp.data.matched_gps_point.edge_id);
-        } catch (err) {
+        } catch (_e) {
           toast.error("Failed to process map match result", { duration: 800 });
         }
       };
@@ -593,14 +601,12 @@ export default function Home() {
         async (pos) => {
           const currentTime = new Date();
           deadReckoning.current = false;
-          let deltaTime: number = 0;
+          let deltaTime = 0;
           let distance = 0;
 
-          if (mapMatchStep.current > 1 && prevGps && prevGps.current) {
+          if (mapMatchStep.current > 1 && prevGps?.current) {
             deltaTime =
-              (currentTime.getTime() -
-                (prevGps.current.time.getTime())) /
-              1000.0;
+              (currentTime.getTime() - prevGps.current.time.getTime()) / 1000.0;
             distance =
               haversineDistance(
                 prevGps.current.lat,
@@ -636,7 +642,7 @@ export default function Home() {
             return;
           }
 
-          let mapMatchRequest: MapMatchRequest = {
+          const mapMatchRequest: MapMatchRequest = {
             gps_point: currentGps,
             k: mapMatchStep.current,
             candidates: candidates.current,
@@ -673,10 +679,9 @@ export default function Home() {
           const currentTime = new Date();
           if (err.code == err.POSITION_UNAVAILABLE || err.code == err.TIMEOUT) {
             // dead reckoning
-            let now = new Date();
+            const now = new Date();
             if (
-              prevGps &&
-              prevGps.current &&
+              prevGps?.current &&
               now.getTime() - prevGps.current?.time?.getTime() >
                 LOST_GPS_THRESHOLD
             ) {
@@ -692,7 +697,7 @@ export default function Home() {
                 dead_reckoning: deadReckoning.current,
               };
 
-              let mapMatchRequest: MapMatchRequest = {
+              const mapMatchRequest: MapMatchRequest = {
                 gps_point: currentGps,
                 k: mapMatchStep.current,
                 candidates: candidates.current,
@@ -732,23 +737,6 @@ export default function Home() {
       return () => {
         navigator.geolocation.clearWatch(watchId);
       };
-    } else {
-      mapMatchStep.current = 1;
-      candidates.current = [];
-      speedMeanK.current = DEFAULT_CONSTANT_SPEED;
-      speedStdK.current = DEFAULT_CONSTANT_SPEED;
-      lastBearing.current = 0.0;
-      prevGps.current = undefined;
-      deadReckoning.current = false;
-      setNavigationState((prev) => ({
-        ...prev,
-        matchedGpsLoc: undefined,
-        matchedHeading: 0,
-      }));
-      setSnappedEdgeID(0);
-      isInitialReroutePerformed.current = false;
-      currentGpsLocRef.current = null;
-      currentHeadingRef.current = 0;
     }
   }, [routeStarted]);
 
@@ -776,7 +764,7 @@ export default function Home() {
         const curLon = currentGpsLocRef.current.lon;
         const curH = normalizeBearing(currentHeadingRef.current);
 
-        let updatedState: any = {};
+        const updatedState: Partial<typeof navigationState> = {};
         let stateChanged = false;
 
         const usedRoute = routeDataRef.current?.[activeRouteRef.current];
@@ -864,7 +852,7 @@ export default function Home() {
               setNextTurnIndex(-1);
               setSearchResults([]);
               setShowResult(false);
-              replace(`${pathname}`);
+              router.replace(`${pathname}`);
               setNavigationState({
                 matchedGpsLoc: undefined,
                 matchedHeading: 0,
@@ -904,7 +892,7 @@ export default function Home() {
 
     frameId = requestAnimationFrame(sync);
     return () => cancelAnimationFrame(frameId);
-  }, [routeStarted, routeData, activeRoute]);
+  }, [routeStarted, routeData, activeRoute, destinationLoc, pathname, router]);
 
   // Keep a ref to alternativeRoutesLineData so the re-routing effect can read
   // the latest value without listing it as a dependency (which caused an infinite loop).
@@ -939,13 +927,13 @@ export default function Home() {
       ) {
         lastFetchedAlternativesStep.current = directionsIndex;
         isReroutingRef.current = true;
-        (async () => {
+        void (async () => {
           try {
             const reqBody = {
-              srcLat: currentGpsLocRef.current?.lat || matchedGpsLoc?.lat!,
-              srcLon: currentGpsLocRef.current?.lon || matchedGpsLoc?.lon!,
-              destLat: destinationLoc.osm_object.lat!,
-              destLon: destinationLoc.osm_object.lon!,
+              srcLat: currentGpsLocRef.current?.lat ?? matchedGpsLoc?.lat ?? 0,
+              srcLon: currentGpsLocRef.current?.lon ?? matchedGpsLoc?.lon ?? 0,
+              destLat: destinationLoc.osm_object.lat,
+              destLon: destinationLoc.osm_object.lon,
               reroute: true,
               startEdgeId: snappedEdgeID,
             };
@@ -961,7 +949,7 @@ export default function Home() {
                 (Date.now() - (startTimeRef.current?.getTime() ?? Date.now())) /
                 60000;
 
-              newAlternatives.forEach((alt: any) => {
+              newAlternatives.forEach((alt: RouteCRPResponse) => {
                 alt.distance = parseFloat(
                   (alt.distance / 1000 + currentDistOffset).toFixed(2),
                 );
@@ -980,7 +968,7 @@ export default function Home() {
                     type: "LineString",
                     coordinates: coords.map((coord) => [coord[1], coord[0]]),
                   },
-                } as LineData;
+                };
               });
 
               const dummyRoute: LineData = {
@@ -1016,7 +1004,7 @@ export default function Home() {
     if (matchedGpsLoc && usedRoute && !isReroutingRef.current) {
       const selectedRoute = usedRoute;
       // perform a re-route if the user's current location (snapped edge id) is outside the preferred route
-      (async () => {
+      void (async () => {
         let isOffTheRoute = isUserOffTheRoute({
           snappedEdgeID: snappedEdgeID,
           routeData: selectedRoute,
@@ -1051,10 +1039,10 @@ export default function Home() {
               isInitialReroutePerformed.current = true;
             }
             const reqBody = {
-              srcLat: currentGpsLocRef.current?.lat || matchedGpsLoc?.lat!,
-              srcLon: currentGpsLocRef.current?.lon || matchedGpsLoc?.lon!,
-              destLat: destinationLoc?.osm_object.lat!,
-              destLon: destinationLoc?.osm_object.lon!,
+              srcLat: currentGpsLocRef.current?.lat ?? matchedGpsLoc?.lat ?? 0,
+              srcLon: currentGpsLocRef.current?.lon ?? matchedGpsLoc?.lon ?? 0,
+              destLat: destinationLoc?.osm_object.lat ?? 0,
+              destLon: destinationLoc?.osm_object.lon ?? 0,
               reroute: true,
               startEdgeId: snappedEdgeID,
             };
@@ -1078,40 +1066,34 @@ export default function Home() {
             // Reset trackers for correct ETA/Distance calculation on the new route
             startTimeRef.current = new Date();
             totalDistanceTraveledRef.current = 0;
-          } catch (e: any) {
-            toast.error(
-              `Failed to fetch route (re-routing): ${e?.message ?? "Unknown error"}`,
-              { duration: 800 },
-            );
+          } catch (err: unknown) {
+            const message =
+              err instanceof Error ? err.message : "Unknown error";
+            toast.error(`Failed to fetch route (re-routing): ${message}`, {
+              duration: 800,
+            });
           } finally {
             isReroutingRef.current = false;
           }
         }
       })();
     }
-  }, [snappedEdgeID, routeData, activeRoute, destinationLoc]);
+  }, [snappedEdgeID, routeData, activeRoute, destinationLoc, matchedGpsLoc]);
 
   const handleSetRouteDataCRP = useCallback((data: RouteCRPResponse[]) => {
+    if (data.length === 0) {
+      setPolylineData(undefined);
+      setAlternativeRoutesLineData([]);
+      setActiveRoute(0);
+    }
     setRouteData(data);
   }, []);
 
-  useEffect(() => {
-    if (routeData?.length == 0) {
-      setPolylineData(undefined);
-      setAlternativeRoutesLineData([]);
-    }
-  }, [routeData]);
-
-  useEffect(() => {
-    if (!routeData || routeData.length === 0) {
-      if (activeRoute !== 0) setActiveRoute(0);
-      return;
-    }
-
-    if (activeRoute >= routeData.length) {
-      setActiveRoute(0);
-    }
-  }, [routeData, activeRoute]);
+  // Adjust activeRoute if it's out of bounds (during render)
+  const safeActiveRoute = (routeData && activeRoute >= routeData.length) ? 0 : activeRoute;
+  if (safeActiveRoute !== activeRoute) {
+    setActiveRoute(safeActiveRoute);
+  }
 
   return (
     <main className="flex relative  w-full overflow-hidden">
@@ -1121,13 +1103,13 @@ export default function Home() {
         alternativeRoutes={alternativeRoutesLineData}
         activeRoute={activeRoute}
         isDirectionActive={isDirectionActive}
-        routeDataCRP={routeData || []}
+        routeDataCRP={routeData ?? []}
         nextTurnIndex={nextTurnIndex}
         onSelectSource={onSelectSource}
         onSelectDestination={onSelectDestination}
         routeStarted={routeStarted}
         matchedGpsLoc={matchedGpsLoc}
-        userHeading={matchedHeading || 0}
+        userHeading={matchedHeading ?? 0}
         currentGpsLocRef={currentGpsLocRef}
         currentHeadingRef={currentHeadingRef}
         onMapClick={onMapClick}
@@ -1165,10 +1147,10 @@ export default function Home() {
         speed={speed}
       />
 
-      {showResult && isSourceFocused && (
+      {actualShowResult && isSourceFocused && (
         <SearchResults places={searchResults} select={onSelectSource} />
       )}
-      {showResult && isDestinationFocused && (
+      {actualShowResult && isDestinationFocused && (
         <SearchResults places={searchResults} select={onSelectDestination} />
       )}
     </main>

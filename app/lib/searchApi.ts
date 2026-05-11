@@ -14,6 +14,23 @@ export interface Place {
   distance: number;
 }
 
+interface GeoJsonFeature {
+  properties: {
+    osm_id: number;
+    name?: string;
+    street?: string;
+    housenumber?: string;
+    district?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    osm_value?: string;
+  };
+  geometry: {
+    coordinates: [number, number];
+  };
+}
+
 export interface SearchResponse {
   data: Place[];
 }
@@ -29,7 +46,7 @@ export const fetchSearch = async (
       {},
     );
 
-    const places: Place[] = data.features.map((feature: any) => {
+    const places: Place[] = data.features.map((feature: GeoJsonFeature) => {
       const props = feature.properties;
       const coords = feature.geometry.coordinates; // [lon, lat]
       
@@ -39,28 +56,28 @@ export const fetchSearch = async (
       return {
         osm_object: {
           id: props.osm_id,
-          name: props.name || addressParts[0] || "Unknown",
+          name: props.name ?? addressParts[0] ?? "Unknown",
           lat: coords[1],
           lon: coords[0],
           address: address,
-          type: props.osm_value || "unknown",
+          type: props.osm_value ?? "unknown",
         },
         distance: 0, // distance can be calculated if needed, or left as 0 since photon doesn't return it
       };
     });
 
     return { data: places };
-  } catch (error) {
+  } catch {
     throw new Error("Failed to fetch search results");
   }
 };
 
-export type ReverseGeocodingRequest = {
+export interface ReverseGeocodingRequest {
   lat: number;
   lon: number;
-};
+}
 
-export type ReverseGeocodingResponse = {
+export interface ReverseGeocodingResponse {
   data: {
     data: {
       lat: number;
@@ -69,7 +86,7 @@ export type ReverseGeocodingResponse = {
       address: string;
     };
   };
-};
+}
 
 export const fetchReverseGeocoding = async ({
   lat,
@@ -94,7 +111,7 @@ export const fetchReverseGeocoding = async ({
           data: {
             lat: coords[1],
             lon: coords[0],
-            name: props.name || addressParts[0] || "Unknown",
+            name: props.name ?? addressParts[0] ?? "Unknown",
             address: address,
           }
         }
@@ -102,7 +119,7 @@ export const fetchReverseGeocoding = async ({
     } else {
       throw new Error("No results found");
     }
-  } catch (error) {
+  } catch {
     throw new Error("Failed to fetch reverse geocoding results");
   }
 };

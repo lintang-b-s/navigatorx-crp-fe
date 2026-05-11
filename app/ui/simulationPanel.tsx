@@ -1,14 +1,14 @@
 "use client";
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import { FaCheck } from "react-icons/fa";
 import { CiPlay1, CiStop1 } from "react-icons/ci";
 import toast from "react-hot-toast";
-import { scanTracks, getTrackPoints, GpxPoint } from "@/app/lib/gpxParser";
+import { scanTracks, getTrackPoints } from "@/app/lib/gpxParser";
 import { scanCsvTracks, getCsvTrackPoints } from "@/app/lib/csvParser";
 
 interface SimulationPanelProps {
   onSimulationStart: (
-    points: any[], 
+    points: { Latitude: number; Longitude: number; datetime_utc: string; speed?: number }[], 
     useWebSocket: boolean, 
     showGpsWindow: boolean, 
     drivingDirection: boolean,
@@ -92,7 +92,7 @@ export const SimulationPanel = React.memo(function SimulationPanel({
     }
 
     try {
-      let points: any[] = [];
+      let points: { Latitude: number; Longitude: number; datetime_utc: string; speed?: number }[] = [];
       if (file.name.endsWith(".json")) {
         const text = await file.text();
         points = JSON.parse(text);
@@ -132,9 +132,10 @@ export const SimulationPanel = React.memo(function SimulationPanel({
         file.name,
         selectedTrack
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Invalid file:", err);
-      toast.error(`Error: ${err.message || "Invalid file"}`);
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`Error: ${message || "Invalid file"}`);
     }
   };
 

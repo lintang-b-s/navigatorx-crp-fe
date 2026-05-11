@@ -1,13 +1,13 @@
 import * as Comlink from "comlink";
-import { fetchRouteCRP, fetchAlternativeRoutes, RouteRequest } from "./navigatorxApi";
+import { fetchRouteCRP, fetchAlternativeRoutes, RouteRequest, RouteCRPResponseWrapper, AlternativeRoutesResponse, RouteCRPResponse } from "./navigatorxApi";
 import polyline from "@mapbox/polyline";
 import { LineData } from "@/app/types/definition";
 
 export class RoutingWorker {
-  public async fetchAndProcessRoutes(reqBody: RouteRequest, includeAlternatives: boolean = true) {
+  public async fetchAndProcessRoutes(reqBody: RouteRequest, includeAlternatives = true) {
     try {
-      let newSpRouteData: any;
-      let alternativeRouteData: any = { data: { alternative_routes: [] } };
+      let newSpRouteData: RouteCRPResponseWrapper;
+      let alternativeRouteData: AlternativeRoutesResponse = { data: { alternative_routes: [] } };
 
       if (includeAlternatives) {
         [newSpRouteData, alternativeRouteData] = await Promise.all([
@@ -23,7 +23,7 @@ export class RoutingWorker {
       );
       
       const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
-      newAlternatives.forEach((alt: any) => {
+      newAlternatives.forEach((alt: RouteCRPResponse) => {
         alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
       });
 
@@ -40,7 +40,7 @@ export class RoutingWorker {
 
       let alternativeRoutesLineData: LineData[] = [];
       if (newAlternatives.length > 0) {
-        const alternativesPolyline = newAlternatives.map((route: any) => {
+        const alternativesPolyline = newAlternatives.map((route: RouteCRPResponse) => {
           const decodedCoords = polyline.decode(route.path);
           return {
             type: "Feature",
@@ -48,7 +48,7 @@ export class RoutingWorker {
               type: "LineString",
               coordinates: decodedCoords.map((coord) => [coord[1], coord[0]]),
             },
-          } as LineData;
+          };
         });
 
         const dummyRoute: LineData = {
@@ -70,9 +70,10 @@ export class RoutingWorker {
         mainLineData,
         alternativeRoutesLineData,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
         // Need to serialize error because Error objects don't pass through Comlink well sometimes
-        throw new Error(error?.message || "Unknown error in RoutingWorker");
+        const message = error instanceof Error ? error.message : "Unknown error in RoutingWorker";
+        throw new Error(message);
     }
   }
 }

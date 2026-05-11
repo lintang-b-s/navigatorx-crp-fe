@@ -25,7 +25,7 @@ export async function scanCsvTracks(file: File): Promise<string[]> {
     
     const chunk = decoder.decode(value, { stream: true });
     const lines = (partialLine + chunk).split(/\r?\n/);
-    partialLine = lines.pop() || "";
+    partialLine = lines.pop() ?? "";
     
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -63,7 +63,7 @@ export async function getCsvTrackPoints(file: File, trackId: string): Promise<Cs
     
     const chunk = decoder.decode(value, { stream: true });
     const lines = (partialLine + chunk).split(/\r?\n/);
-    partialLine = lines.pop() || "";
+    partialLine = lines.pop() ?? "";
     
     for (const line of lines) {
       if (!line.trim()) continue;

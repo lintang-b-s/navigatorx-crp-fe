@@ -93,16 +93,16 @@ export const fetchRouteCRP = async ({
 
     const { data } = await axios.get(url, {});
 
-    return data;
-  } catch (error: any) {
-    if (error.response) {
+    return data as RouteCRPResponseWrapper;
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response) {
       if (error.response.status === 502) {
         throw new Error("navigatorx routing engine sedang ada perbaikan");
       } else if (error.response.status === 400) {
         const backendMessage =
-          error.response.data?.message ||
-          error.response.data?.error ||
-          error.response.data?.detail;
+          (error.response.data?.message ??
+          error.response.data?.error ??
+          error.response.data?.detail) as string | undefined;
 
         if (typeof backendMessage === "string" && backendMessage.trim()) {
           throw new Error(backendMessage);
@@ -124,8 +124,8 @@ export const fetchBoundingBox = async (): Promise<BoundingBoxWrapper> => {
   try {
     const url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/boundingBox`;
     const { data } = await axios.get(url);
-    return data;
-  } catch (error) {
+    return data as BoundingBoxWrapper;
+  } catch {
     throw new Error("Failed to fetch bounding box");
   }
 };
@@ -147,8 +147,8 @@ export const fetchAlternativeRoutes = async ({
 
     const { data } = await axios.get(url, {});
 
-    return data;
-  } catch (error) {
+    return data as AlternativeRoutesResponse;
+  } catch {
     throw new Error("Failed to fetch search results");
   }
 };

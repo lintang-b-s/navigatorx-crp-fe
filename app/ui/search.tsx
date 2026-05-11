@@ -4,9 +4,7 @@ import { CiSearch } from "react-icons/ci";
 import { SearchBoxProps } from "../types/definition";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { useDebouncedCallback } from "use-debounce";
-import { SearchResults } from "./searchResult";
 import { useEffect, useState } from "react";
-import { truncateString } from "../lib/util";
 
 export const SearchBox = React.memo(function SearchBox({
   isSource,
@@ -18,7 +16,7 @@ export const SearchBox = React.memo(function SearchBox({
 }: SearchBoxProps) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const { replace } = useRouter();
+  const router = useRouter();
   const paramName = isSource ? "source" : "destination";
   const [term, setTerm] = useState(() => searchParams.get(paramName) ?? "");
 
@@ -40,7 +38,7 @@ export const SearchBox = React.memo(function SearchBox({
         }`
       );
     }
-  }, [sourceLoc, destinationLoc]);
+  }, [sourceLoc, destinationLoc, isSource]);
 
   const parseCoordinates = (input: string) => {
     const coordRegex =
@@ -70,7 +68,7 @@ export const SearchBox = React.memo(function SearchBox({
         params.delete("destination");
       }
     }
-    replace(`${pathname}?${params.toString()}`);
+    router.replace(`${pathname}?${params.toString()}`);
   }, 150);
 
   return (

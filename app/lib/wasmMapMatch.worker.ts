@@ -1,10 +1,36 @@
 import * as Comlink from "comlink";
 import geohash from "ngeohash";
-import type { Candidate, Gps } from "./mapmatchApi";
+import type { Candidate, Gps, MatchedGpsPoint } from "./mapmatchApi";
 
-type InitOptions = {
+interface InitOptions {
   apiUrl: string;
-};
+}
+
+declare global {
+  var Go: new () => {
+    importObject: WebAssembly.Imports;
+    run: (instance: WebAssembly.Instance) => Promise<void>;
+  };
+  var InitializeMapMatchingGraph: (
+    vertices: number,
+    matrix: Uint8Array,
+  ) => void;
+  var RebuildMapMatchGraph: (tileData: Uint8Array) => void;
+  var OnlineMapMatch: (
+    gpsPoint: Gps,
+    k: number,
+    candidates: Candidate[],
+    speedMeanK: number,
+    speedStdK: number,
+    lastBearing: number,
+  ) => {
+    matched_gps_point: MatchedGpsPoint;
+    candidates: Candidate[];
+    speed_mean_k: number;
+    speed_std_k: number;
+    edge_initial_bearing: number;
+  };
+}
 
 class WasmMapMatcherWorker {
   private isReady = false;
@@ -34,11 +60,11 @@ class WasmMapMatcherWorker {
   }
 
   private async initialize() {
-    if (!(globalThis as any).Go) {
+    if (!globalThis.Go) {
       await import(/* webpackIgnore: true */ `/wasm_exec.js?v=${Date.now()}`);
     }
 
-    const go = new (globalThis as any).Go();
+    const go = new globalThis.Go();
     const wasmResponse = await fetch(
       `/online_map_matcher.wasm?v=${Date.now()}`,
     );
@@ -55,15 +81,12 @@ class WasmMapMatcherWorker {
 
     let retries = 0;
     const maxRetries = 50;
-    while (
-      !(globalThis as any).InitializeMapMatchingGraph &&
-      retries < maxRetries
-    ) {
+    while (!globalThis.InitializeMapMatchingGraph && retries < maxRetries) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       retries++;
     }
 
-    if (!(globalThis as any).InitializeMapMatchingGraph) {
+    if (!globalThis.InitializeMapMatchingGraph) {
       throw new Error("Go WASM failed to export functions within 5 seconds");
     }
 
@@ -90,10 +113,7 @@ class WasmMapMatcherWorker {
     }
 
     const matrixBytes = new Uint8Array(await matrixResponse.arrayBuffer());
-    (globalThis as any).InitializeMapMatchingGraph(
-      numberOfVertices,
-      matrixBytes,
-    );
+    globalThis.InitializeMapMatchingGraph(numberOfVertices, matrixBytes);
 
     this.isReady = true;
     this.isInitializing = false;
@@ -117,7 +137,7 @@ class WasmMapMatcherWorker {
       const tileData = new Uint8Array(await response.arrayBuffer());
       if (this.requestedTile !== gh) return;
 
-      (globalThis as any).RebuildMapMatchGraph(tileData);
+      globalThis.RebuildMapMatchGraph(tileData);
       this.currentTile = gh;
     } catch (error) {
       console.warn(`[WasmMapMatcherWorker] Failed to load tile ${gh}:`, error);
@@ -134,9 +154,9 @@ class WasmMapMatcherWorker {
     speedStdK: number,
     lastBearing: number,
   ) {
-    if (!this.isReady || !(globalThis as any).OnlineMapMatch) return null;
+    if (!this.isReady || !globalThis.OnlineMapMatch) return null;
 
-    return (globalThis as any).OnlineMapMatch(
+    return globalThis.OnlineMapMatch(
       gpsPoint,
       k,
       candidates,

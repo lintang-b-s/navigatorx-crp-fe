@@ -118,9 +118,9 @@ export async function getTrackPoints(file: File, targetName: string): Promise<Gp
           if (trkptEnd !== -1) {
             const trkptXml = text.slice(trkptStart, trkptEnd + 8);
             
-            const latMatch = trkptXml.match(/lat="([-0-9.]+)"/);
-            const lonMatch = trkptXml.match(/lon="([-0-9.]+)"/);
-            const timeMatch = trkptXml.match(/<time>(.*?)<\/time>/);
+            const latMatch = /lat="([-0-9.]+)"/.exec(trkptXml);
+            const lonMatch = /lon="([-0-9.]+)"/.exec(trkptXml);
+            const timeMatch = /<time>(.*?)<\/time>/.exec(trkptXml);
 
             if (latMatch && lonMatch && timeMatch) {
               points.push({

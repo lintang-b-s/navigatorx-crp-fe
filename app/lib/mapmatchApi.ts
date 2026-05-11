@@ -63,8 +63,8 @@ export const fetchMapMatch = async (
       request
     );
 
-    return data;
-  } catch (error) {
+    return data as MapMatchResponse;
+  } catch {
     throw new Error("Failed to fetch search results");
   }
 };

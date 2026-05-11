@@ -7,7 +7,7 @@ export class WasmMapMatcher {
   private isReady = false;
   private isInitializing = false;
   private apiUrl =
-    process.env.NEXT_PUBLIC_ROUTER_API_URL || "http://localhost:6060";
+    process.env.NEXT_PUBLIC_ROUTER_API_URL ?? "http://localhost:6060";
   private worker: Worker | null = null;
   private workerApi: Comlink.Remote<WasmMapMatcherWorkerApi> | null = null;
   private initPromise: Promise<void> | null = null;
@@ -37,9 +37,10 @@ export class WasmMapMatcher {
       this.isReady = true;
       this.isInitializing = false;
       toast.success("WASM Engine Ready", { id: toastId });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("WASM Init Error:", error);
-      toast.error(`WASM Init Failed: ${error.message}`, { id: toastId });
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`WASM Init Failed: ${message}`, { id: toastId });
       this.isInitializing = false;
       throw error;
     }

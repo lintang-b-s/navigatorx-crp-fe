@@ -12,7 +12,6 @@ import {
   Popup,
   AttributionControl,
 } from "@vis.gl/react-maplibre";
-// @ts-ignore
 import "maplibre-gl/dist/maplibre-gl.css"; // See notes below
 import { useEffect, useMemo, useState, useRef } from "react";
 import maplibregl from "maplibre-gl";
@@ -24,6 +23,7 @@ import { IoLocationSharp } from "react-icons/io5";
 import { fetchBoundingBox } from "../lib/navigatorxApi";
 import { TileMath } from "../lib/azure_maps_zoom_tiles";
 import { project, unproject } from "../lib/util";
+import Image from "next/image";
 
 const ACTIVE_ROUTE_COLOR = "#470DF9";
 const ACTIVE_ROUTE_OPACITY = 0.9;
@@ -51,7 +51,6 @@ export const MapComponent = React.memo(function MapComponent({
   nextTurnIndex,
   onSelectSource,
   onSelectDestination,
-  matchedGpsLoc,
   rawGpsLoc,
   gpsWindowPoints,
   routeStarted,
@@ -66,9 +65,9 @@ export const MapComponent = React.memo(function MapComponent({
     lng: number;
     lat: number;
   } | null>(null);
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
 
-  const [boundingBoxGeoJSON, setBoundingBoxGeoJSON] = useState<any>(null);
+  const [boundingBoxGeoJSON, setBoundingBoxGeoJSON] = useState<LineData | null>(null);
 
   const [viewState, setViewState] = React.useState<{
     longitude: number;
@@ -84,7 +83,7 @@ export const MapComponent = React.memo(function MapComponent({
     pitch: 0,
   });
 
-  const geolocateControlRef = useRef<any>(null);
+  const geolocateControlRef = useRef<maplibregl.GeolocateControl | null>(null);
 
   useEffect(() => {
     if (triggerGeolocate && geolocateControlRef.current) {
@@ -124,12 +123,12 @@ export const MapComponent = React.memo(function MapComponent({
         console.error("Failed to fetch bounding box:", error);
       }
     };
-    getBoundingBox();
+    void getBoundingBox();
   }, []);
 
   const [touchStartTime, setTouchStartTime] = useState<number | null>(null);
 
-  function handleTouchStart(evt: any) {
+  function handleTouchStart(_evt: any) {
     setTouchStartTime(Date.now());
   }
 
@@ -164,18 +163,17 @@ export const MapComponent = React.memo(function MapComponent({
     }
   }, [lineData, alternativeRoutes, activeRoute, routeStarted]);
 
-  useEffect(() => {
-    const turn =
-      routeDataCRP?.[activeRoute]?.driving_directions?.[nextTurnIndex];
-    if (nextTurnIndex != -1 && turn) {
-      setViewState((prev) => ({
-        ...prev,
-        longitude: turn.turn_point.lon,
-        latitude: turn.turn_point.lat,
-        zoom: 17,
-      }));
-    }
-  }, [nextTurnIndex, routeDataCRP, activeRoute]);
+  const [lastTurnMoved, setLastTurnMoved] = useState(-1);
+  const turn = routeDataCRP?.[activeRoute]?.driving_directions?.[nextTurnIndex];
+  if (nextTurnIndex !== -1 && nextTurnIndex !== lastTurnMoved && turn) {
+    setLastTurnMoved(nextTurnIndex);
+    setViewState((prev) => ({
+      ...prev,
+      longitude: turn.turn_point.lon,
+      latitude: turn.turn_point.lat,
+      zoom: 17,
+    }));
+  }
 
   const activeRouteCoordinates =
     activeRoute === 0
@@ -337,7 +335,7 @@ export const MapComponent = React.memo(function MapComponent({
                 currentGpsLocRef.current.lat,
               ],
               zoom: 17,
-              bearing: currentHeadingRef?.current || 0,
+              bearing: currentHeadingRef?.current ?? 0,
             });
             mapRef.current.fire("resume-tracking");
           }
@@ -412,7 +410,7 @@ export const MapComponent = React.memo(function MapComponent({
               source="active-route-source"
               paint={{
                 "line-color": ACTIVE_ROUTE_COLOR,
-                "line-width": ACTIVE_ROUTE_WIDTH_BY_ZOOM as any,
+                "line-width": ACTIVE_ROUTE_WIDTH_BY_ZOOM as maplibregl.PropertyValueSpecification<number>,
                 "line-opacity": ACTIVE_ROUTE_OPACITY,
               }}
             />
@@ -432,7 +430,7 @@ export const MapComponent = React.memo(function MapComponent({
               latitude={turnPointOnPolyline[1]}
               anchor="center"
             >
-              <img
+              <Image
                 src={turnIcon}
                 alt="turn icon"
                 width={turnIconSize}
@@ -459,7 +457,7 @@ export const MapComponent = React.memo(function MapComponent({
               source="polyline-source"
               paint={{
                 "line-color": ACTIVE_ROUTE_COLOR,
-                "line-width": ACTIVE_ROUTE_WIDTH_BY_ZOOM as any,
+                "line-width": ACTIVE_ROUTE_WIDTH_BY_ZOOM as maplibregl.PropertyValueSpecification<number>,
                 "line-opacity": ACTIVE_ROUTE_OPACITY,
               }}
             />
@@ -690,7 +688,7 @@ const ImperativeNavigationMarker = ({
   currentHeadingRef,
   routeStarted,
 }: {
-  currentGpsLocRef: React.RefObject<any>;
+  currentGpsLocRef: React.RefObject<{ lat: number; lon: number } | null>;
   currentHeadingRef: React.RefObject<number>;
   routeStarted: boolean;
 }) => {
@@ -712,17 +710,17 @@ const ImperativeNavigationMarker = ({
     img.style.transition = "none";
     el.appendChild(img);
 
-    const mapInstance = (map as any).getMap ? (map as any).getMap() : map;
+    const mapInstance = (map as { getMap?: () => maplibregl.Map }).getMap ? (map as { getMap: () => maplibregl.Map }).getMap() : (map as unknown as maplibregl.Map);
 
     markerRef.current = new maplibregl.Marker({
       element: el,
       rotationAlignment: "map",
     })
       .setLngLat([
-        currentGpsLocRef.current?.lon || 0,
-        currentGpsLocRef.current?.lat || 0,
+        currentGpsLocRef.current?.lon ?? 0,
+        currentGpsLocRef.current?.lat ?? 0,
       ])
-      .setRotation(currentHeadingRef.current || 0)
+      .setRotation(currentHeadingRef.current ?? 0)
       .addTo(mapInstance);
 
     let frameId: number;

@@ -1,4 +1,4 @@
-import React, { Dispatch, SetStateAction } from "react";
+import React from "react";
 import { Place } from "../lib/searchApi";
 import { SearchSelectorProps } from "../types/definition";
 
@@ -16,10 +16,10 @@ export const SearchResults = React.memo(function SearchResults(props: SearchSele
   );
 });
 
-type SelectorProps = {
+interface SelectorProps {
   index?: number;
   place: Place;
-};
+}
 
 function Selector(props: SelectorProps) {
   return (

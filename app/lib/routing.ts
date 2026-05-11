@@ -1,4 +1,4 @@
-import { Coord, Gps } from "./mapmatchApi";
+import { Coord } from "./mapmatchApi";
 import { Direction, RouteCRPResponse } from "./navigatorxApi";
 import { haversineDistance } from "./util";
 
@@ -39,8 +39,7 @@ export function getCurrentUserDirectionIndex({
 
   for (let i = 0; i < drivingDirections.length; i++) {
     const direction = drivingDirections[i];
-    for (let j = 0; j < direction.edge_ids.length; j++) {
-      const directionEdgeID = direction.edge_ids[j];
+    for (const directionEdgeID of direction.edge_ids) {
       if (snappedEdgeID === directionEdgeID) {
         return i;
       }
@@ -86,7 +85,7 @@ export function isNearEndOfSuggestAlternativesStep({
   currentIndex: number;
 }): boolean {
   const currentDirection = drivingDirections[currentIndex];
-  if (!currentDirection || !currentDirection.suggest_alternatives) return false;
+  if (!currentDirection?.suggest_alternatives) return false;
 
   const lastThreeEdges = currentDirection.edge_ids.slice(-3);
   return lastThreeEdges.includes(snappedEdgeID);

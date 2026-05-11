@@ -1,14 +1,13 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import axios from "axios";
 import { SimulationPanel } from "@/app/ui/simulationPanel";
-import { Coord, MapMatchRequest, Candidate } from "@/app/lib/mapmatchApi";
-import { haversineDistance, project, gt } from "@/app/lib/util";
+import { Coord, MapMatchRequest, Candidate, MapMatchResponse } from "@/app/lib/mapmatchApi";
+import { haversineDistance, project } from "@/app/lib/util";
 import gsap from "gsap";
 import {
-  fetchRouteCRP,
   RouteCRPResponse,
   fetchAlternativeRoutes,
 } from "@/app/lib/navigatorxApi";
@@ -26,7 +25,6 @@ import Image from "next/image";
 import { FaCheck } from "react-icons/fa";
 import { CiStop1 } from "react-icons/ci";
 import {
-  THROTTLE_DISTANCE_THRESHOLD,
   INVALID_LAT,
   INVALID_LON,
   MIN_SPEED_THRESHOLD,
@@ -92,7 +90,7 @@ export default function SimulationPage() {
   const socketRef = useRef<WebSocket | null>(null);
 
   // Dummy data required by MapComponent props
-  const [userLoc, setUserLoc] = useState({ longitude: -100, latitude: 40 });
+  const [_userLoc, setUserLoc] = useState({ longitude: -100, latitude: 40 });
 
   const [gpsWindowPoints, setGpsWindowPoints] = useState<Coord[]>([]);
 
@@ -125,8 +123,8 @@ export default function SimulationPage() {
   }, [snappedEdgeID]);
 
   // Memoized props for MapComponent to prevent unnecessary re-renders
-  const handleSelectSource = useCallback(() => {}, []);
-  const handleSelectDestination = useCallback(() => {}, []);
+  const handleSelectSource = useCallback(() => { /* noop */ }, []);
+  const handleSelectDestination = useCallback(() => { /* noop */ }, []);
 
   const onSimulationStop = useCallback(() => {
     setIsRunning(false);
@@ -140,7 +138,7 @@ export default function SimulationPage() {
   }, []);
   const onSimulationStart = useCallback(
     async (
-      points: any[],
+      points: { Latitude: number; Longitude: number; datetime_utc: string; speed?: number }[],
       useWebSocket: boolean,
       showGpsWindow: boolean,
       drivingDirection: boolean,
@@ -177,7 +175,7 @@ export default function SimulationPage() {
 
       if (useWebSocket) {
         const wsUrl =
-          process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL ||
+          process.env.NEXT_PUBLIC_MAP_MATCH_WS_URL ??
           "ws://localhost:6060/ws/onlineMapMatch";
         socketRef.current = new WebSocket(wsUrl);
         socketRef.current.onopen = () => console.log("WebSocket connected");
@@ -245,10 +243,11 @@ export default function SimulationPage() {
 
         setActiveRoute(0);
         activeRouteRef.current = 0;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Failed to fetch initial route:", error);
         if (drivingDirection) {
-          toast.error("Failed to fetch initial route: " + error.message);
+          const message = error instanceof Error ? error.message : String(error);
+          toast.error("Failed to fetch initial route: " + message);
         }
       }
 
@@ -256,12 +255,11 @@ export default function SimulationPage() {
       let speedMeanK = 8.3333;
       let speedStdK = 8.3333;
 
-      let prev: any = null;
-      let prevTime: Date | null = null;
+      let prev: { Latitude: number; Longitude: number; datetime_utc: string; speed?: number } | null = null;
       let lastBearing = 0.0;
 
       const httpUrl =
-        process.env.NEXT_PUBLIC_MAP_MATCH_HTTP_URL ||
+        process.env.NEXT_PUBLIC_MAP_MATCH_HTTP_URL ??
         "http://localhost:6060/api/onlineMapMatch";
 
       let accumulatedDt = 0;
@@ -315,7 +313,7 @@ export default function SimulationPage() {
 
         accumulatedDt += dt_seconds;
         prev = point;
-        prevTime = t;
+        const _prevTime = t;
 
         // Speed threshold check: skip if stationary (but not the first point)
         if (speed < MIN_SPEED_THRESHOLD && i !== 0) {
@@ -330,7 +328,7 @@ export default function SimulationPage() {
             gps_point: {
               lat: point.Latitude,
               lon: point.Longitude,
-              time: t.toISOString() as any,
+              time: t,
               speed: speed,
               delta_time: accumulatedDt || 1.0,
               dead_reckoning: false,
@@ -371,11 +369,10 @@ export default function SimulationPage() {
               apiResponse = { data: res };
             } else if (
               isUsingWebSocketRef.current &&
-              socketRef.current &&
-              socketRef.current.readyState === WebSocket.OPEN
+              socketRef.current?.readyState === WebSocket.OPEN
             ) {
               socketRef.current.send(JSON.stringify(mapMatchRequest));
-              const msg = await new Promise<any>((resolve) => {
+              const msg = await new Promise<{ data: MapMatchResponse }>((resolve) => {
                 socketRef.current!.onmessage = (event) =>
                   resolve(JSON.parse(event.data));
               });
@@ -385,12 +382,9 @@ export default function SimulationPage() {
             }
           }
 
-          if (apiResponse && apiResponse.data) {
+          if (apiResponse?.data) {
             if (
-              apiResponse.data.matched_gps_point &&
-              apiResponse.data.matched_gps_point.matched_coord &&
-              apiResponse.data.matched_gps_point.matched_coord.lat ===
-                INVALID_LAT &&
+              apiResponse.data.matched_gps_point?.matched_coord?.lat === INVALID_LAT &&
               apiResponse.data.matched_gps_point.matched_coord.lon ===
                 INVALID_LON
             ) {
@@ -407,18 +401,16 @@ export default function SimulationPage() {
               continue;
             }
 
-            candidates = apiResponse.data.candidates || [];
+            candidates = apiResponse.data.candidates ?? [];
             speedMeanK = apiResponse.data.speed_mean_k;
             speedStdK = apiResponse.data.speed_std_k;
             lastBearing = apiResponse.data.edge_initial_bearing;
             const targetHeading = normalizeBearing(lastBearing);
 
             if (
-              apiResponse.data.matched_gps_point &&
-              apiResponse.data.matched_gps_point.matched_coord
+              apiResponse.data.matched_gps_point?.matched_coord
             ) {
               const matched = apiResponse.data.matched_gps_point.matched_coord;
-
               if (!currentGpsLocRef.current) {
                 currentGpsLocRef.current = {
                   lat: matched.lat,
@@ -429,15 +421,8 @@ export default function SimulationPage() {
                 // Small initial delay
                 await new Promise((resolve) => setTimeout(resolve, 50));
               } else {
-                const distance =
-                  haversineDistance(
-                    currentGpsLocRef.current.lat,
-                    currentGpsLocRef.current.lon,
-                    matched.lat,
-                    matched.lon,
-                  ) * 1000;
+                const duration = dt_seconds;
 
-                let duration = dt_seconds;
 
                 // Calculate continuous target heading to avoid spinning the long way
                 let diff = targetHeading - currentHeadingRef.current;
@@ -502,7 +487,7 @@ export default function SimulationPage() {
                   }
 
                   const nextTurn = usedRoute.driving_directions[safeIndex];
-                  if (nextTurn && nextTurn.turn_point) {
+                  if (nextTurn?.turn_point) {
                     const newDist =
                       getDistanceFromUserToNextTurn({
                         matchedGpsLoc: currentMatchedLoc,
@@ -529,7 +514,7 @@ export default function SimulationPage() {
                     safeIndex !== lastFetchedAlternativesStep
                   ) {
                     lastFetchedAlternativesStep = safeIndex;
-                    (async () => {
+                    void (async () => {
                       try {
                         const lastPoint = points[points.length - 1];
                         const altResponse = await fetchAlternativeRoutes({
@@ -564,7 +549,7 @@ export default function SimulationPage() {
                                     coord[0],
                                   ]),
                                 },
-                              } as LineData;
+                              };
                             },
                           );
 
@@ -666,7 +651,7 @@ export default function SimulationPage() {
                           lon: matched.lon,
                         });
                       }
-                    } catch (e: any) {
+                    } catch (e: unknown) {
                       console.error("Re-routing failed:", e);
                     }
                   }
@@ -734,7 +719,7 @@ export default function SimulationPage() {
         const curH = normalizeBearing(currentHeadingRef.current);
 
         // 1. Calculate routing state
-        let updatedState: any = {};
+        const updatedState: Partial<typeof simulationState> = {};
         let stateChanged = false;
 
         const usedRoute = routeDataRef.current?.[activeRouteRef.current];
@@ -895,8 +880,7 @@ export default function SimulationPage() {
           </div>
 
           {routeData.length > 0 &&
-            routeData[activeRoute] &&
-            routeData[activeRoute].driving_directions[
+            routeData[activeRoute]?.driving_directions[
               currentDirectionIndex
             ] && (
               <div className="bg-[#222831]/95 backdrop-blur-md rounded-2xl p-4 shadow-xl flex items-center gap-4 border border-white/10">

@@ -1,18 +1,17 @@
-import { Dispatch, MouseEvent, RefObject, SetStateAction } from "react";
 import { Place } from "../lib/searchApi";
 import { RouteCRPResponse, RouteResponse } from "../lib/navigatorxApi";
-import { Coord, Gps } from "../lib/mapmatchApi";
+import { Coord } from "../lib/mapmatchApi";
 
-export type SearchBoxProps = {
+export interface SearchBoxProps {
   isSource: boolean;
   activate: (val: boolean) => void;
   sourceLoc?: Place;
   destinationLoc?: Place;
   onSelectSource: (place: Place) => void;
   onSelectDestination: (place: Place) => void;
-};
+}
 
-export type RouterProps = {
+export interface RouterProps {
   sourceSearchActive: (val: boolean) => void;
   destinationSearchActive: (val: boolean) => void;
   onHandleGetRoutes: (e: any) => void;
@@ -44,14 +43,14 @@ export type RouterProps = {
   timeSpent?: number;
   distanceTraveled?: number;
   speed?: number;
-};
+}
 
-export type SearchSelectorProps = {
+export interface SearchSelectorProps {
   places: Place[];
   select: (place: Place) => void;
-};
+}
 
-export type MapComponentProps = {
+export interface MapComponentProps {
   lineData?: LineData;
   alternativeRoutes?: LineData[];
   onUserLocationUpdateHandler: (lat: number, lon: number) => void;
@@ -68,15 +67,16 @@ export type MapComponentProps = {
   userHeading: number;
   onMapClick?: (lat: number, lon: number) => void;
   isSimulation?: boolean;
-  currentGpsLocRef?: React.RefObject<Coord | null>;
+  currentGpsLocRef?: React.RefObject<{ lat: number; lon: number } | null>;
   currentHeadingRef?: React.RefObject<number>;
   triggerGeolocate?: number;
-};
+}
 
-export type LineData = {
+export interface LineData {
   type: string;
+  properties?: Record<string, unknown>;
   geometry: {
     type: string;
     coordinates: number[][];
   };
-};
+}

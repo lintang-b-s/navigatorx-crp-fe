@@ -58,3 +58,6 @@ dataexclude/
 notes/
 
 !public/online_map_matcher.wasm
+*.txt
+
+.vscode/

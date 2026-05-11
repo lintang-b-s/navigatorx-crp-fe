@@ -45,40 +45,34 @@ function StartingNavigationBadge() {
 }
 
 export const Router = React.memo(function Router(props: RouterProps) {
-  const [isSourceFocused, setIsSourceFocused] = useState(false);
-  const [showDirections, setShowDirections] = useState(false);
+  const [showDirectionsState, setShowDirectionsState] = useState(false);
 
-  const [nowTime, setNowTime] = useState<Date | null>(null);
+  const [nowTime, setNowTime] = useState<Date | null>(() => new Date());
+  const {
+    isSourceFocused: _propsIsSourceFocused,
+    isDestinationFocused: _propsIsDestinationFocused,
+    routeDataCRP,
+    handleDirectionActive: _handleDirectionActive,
+    handleSetNextTurnIndex: _handleSetNextTurnIndex,
+  } = props;
+
+  // Derived state: only show directions if we have route data
+  const showDirections = (routeDataCRP?.length ?? 0) > 0 && showDirectionsState;
+
   useEffect(() => {
-    setNowTime(new Date());
-    const id = setInterval(() => setNowTime(new Date()), 5000);
+    const _currentTime = new Date();
+    const id = setInterval(() => {
+      const nextTime = new Date();
+      setNowTime((prev) =>
+        prev?.getTime() !== nextTime.getTime() ? nextTime : prev,
+      );
+    }, 5000);
     return () => clearInterval(id);
   }, []);
 
   const handleShowDirections = (show: boolean) => {
-    setShowDirections(show);
+    setShowDirectionsState(show);
   };
-
-  useEffect(() => {
-    if (props.isSourceFocused) {
-      setIsSourceFocused(true);
-    }
-    if (props.isDestinationFocused) {
-      setIsSourceFocused(false);
-    }
-  }, [props.isSourceFocused, props.isDestinationFocused]);
-
-  useEffect(() => {
-    if (!props.routeDataCRP || (props.routeDataCRP?.length ?? 0) === 0) {
-      setShowDirections(false);
-      props.handleDirectionActive(false);
-      props.handleSetNextTurnIndex(-1);
-    }
-  }, [
-    props.routeDataCRP,
-    props.handleDirectionActive,
-    props.handleSetNextTurnIndex,
-  ]);
 
   const safeActiveRoute =
     props.routeDataCRP && props.activeRoute < (props.routeDataCRP?.length ?? 0)
@@ -199,7 +193,7 @@ export const Router = React.memo(function Router(props: RouterProps) {
 
           <button
             onClick={(e) => {
-              props.onHandleReverseGeocoding(e, isSourceFocused);
+              props.onHandleReverseGeocoding(e, props.isSourceFocused);
             }}
             className={`flex flex-row px-4 mt-2  ${
               props.isSourceFocused || props.isDestinationFocused
@@ -221,9 +215,9 @@ function showRouteResultMobile(
   props: RouterProps,
   activeRoute: number,
   handleRouteClick: (index: number) => void,
-  routeStarted: boolean = false,
+  routeStarted = false,
   handleStartRoute: (show: boolean) => void,
-  showDirections: boolean = false,
+  showDirections = false,
   handleShowDirections: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
   nowTime: Date | null,
@@ -270,7 +264,7 @@ function showRouteResultMobile(
                hover:bg-blue-400 focus-visible:outline 
                  focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                  cursor-pointer aria-disabled:opacity-50  ml-2  py-3 `}
-                  onClick={(e) => {
+                  onClick={(_e) => {
                     handleShowDirections(false);
                     props.handleDirectionActive(false);
                   }}
@@ -284,8 +278,8 @@ function showRouteResultMobile(
                   className={`${
                     props.ignoreDistanceCheck ||
                     haversineDistance(
-                      props.sourceLoc?.osm_object.lat!,
-                      props.sourceLoc?.osm_object.lon!,
+                      props.sourceLoc?.osm_object.lat ?? 0,
+                      props.sourceLoc?.osm_object.lon ?? 0,
                       props.userLoc.latitude,
                       props.userLoc.longitude,
                     ) < 0.15 // distance antara source point & gps location user < 150 meter
@@ -296,7 +290,7 @@ function showRouteResultMobile(
                      hover:bg-blue-400 focus-visible:outline 
                        focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                        cursor-pointer disabled:cursor-wait disabled:bg-blue-400 disabled:opacity-80 aria-disabled:opacity-50 space-x-2 gap-x-1`}
-                  onClick={(e) => {
+                  onClick={(_e) => {
                     handleStartRoute(true);
                     props.handleDirectionActive(true);
                   }}
@@ -368,7 +362,7 @@ function showRouteResultMobile(
                  hover:bg-blue-400 focus-visible:outline 
                    focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                    cursor-pointer aria-disabled:opacity-50  ml-2   py-3 `}
-                    onClick={(e) => {
+                    onClick={(_e) => {
                       props.handleSetRouteDataCRP([]);
                       props.handleDirectionActive(false);
                     }}
@@ -385,8 +379,8 @@ function showRouteResultMobile(
                   className={`${
                     props.ignoreDistanceCheck ||
                     haversineDistance(
-                      props.sourceLoc?.osm_object.lat!,
-                      props.sourceLoc?.osm_object.lon!,
+                      props.sourceLoc?.osm_object.lat ?? 0,
+                      props.sourceLoc?.osm_object.lon ?? 0,
                       props.userLoc.latitude,
                       props.userLoc.longitude,
                     ) < 0.15 // distance antara source point & gps location user < 150 meter
@@ -397,7 +391,7 @@ function showRouteResultMobile(
                      hover:bg-blue-400 focus-visible:outline 
                        focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                        cursor-pointer disabled:cursor-wait disabled:bg-blue-400 disabled:opacity-80 aria-disabled:opacity-50 space-x-2 gap-x-1`}
-                  onClick={(e) => {
+                  onClick={(_e) => {
                     handleStartRoute(true);
                     props.handleDirectionActive(true);
                   }}
@@ -424,8 +418,7 @@ function showRouteResultMobile(
                 </div>
               )}
 
-              {props.routeDataCRP &&
-                props.routeDataCRP.map((route, index) => (
+              {props.routeDataCRP?.map((route, index) => (
                   <div
                     key={`route-${index}`}
                     className={`flex flex-row items-center border-t-[1px] ${
@@ -464,7 +457,7 @@ function showRouteResultMobile(
                      hover:bg-blue-400 focus-visible:outline 
                        focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                        cursor-pointer aria-disabled:opacity-50 space-x-2 mr-2`}
-                      onClick={(e) => {
+                      onClick={(_e) => {
                         handleShowDirections(true);
                         props.handleDirectionActive(true);
                       }}
@@ -550,7 +543,7 @@ function showRouteResultMobile(
 function showRouteEtaAndDistance(
   props: RouterProps,
   activeRoute: number,
-  routeStarted: boolean = false,
+  routeStarted = false,
   handleStartRoute: (show: boolean) => void,
   nowTime: Date | null,
 ) {
@@ -613,7 +606,7 @@ function showRouteResult(
   props: RouterProps,
   activeRoute: number,
   handleRouteClick: (index: number) => void,
-  showDirections: boolean = false,
+  showDirections = false,
   handleShowDirections: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
   handleStartRoute: (start: boolean) => void,
@@ -736,7 +729,7 @@ function showRouteResult(
                    hover:bg-blue-400 focus-visible:outline 
                      focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                      cursor-pointer aria-disabled:opacity-50`}
-                onClick={(e) => {
+                onClick={(_e) => {
                   handleShowDirections(true);
                   props.handleDirectionActive(true);
                 }}
@@ -763,11 +756,11 @@ function showRouteResult(
 
 function showRouteDirectionsComponent(
   route: RouteCRPResponse,
-  showDirections: boolean = false,
+  _showDirections = false,
   handleShowDirections: (show: boolean) => void,
   handleDirectionActive: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
-  handleStartRoute: (start: boolean) => void,
+  _handleStartRoute: (start: boolean) => void,
 ) {
   const routeDirections = route.driving_directions.reduce<
     CumulativeDirection[]
@@ -799,7 +792,7 @@ function showRouteDirectionsComponent(
                    hover:bg-blue-400 focus-visible:outline 
                      focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                      cursor-pointer aria-disabled:opacity-50 py-2`}
-          onClick={(e) => {
+          onClick={(_e) => {
             handleShowDirections(false);
             handleDirectionActive(false);
           }}
@@ -816,7 +809,7 @@ function showRouteDirectionsComponent(
                    hover:bg-blue-400 focus-visible:outline 
                      focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                      cursor-pointer aria-disabled:opacity-50 ml-auto mr-2 py-3 `}
-          onClick={(e) => {
+          onClick={(_e) => {
             toast.error(
               "Navigate feature only available on mobile device view! ",
               { duration: 1000 },
@@ -833,7 +826,7 @@ function showRouteDirectionsComponent(
         <div
           key={`route-${index}`}
           className={`flex flex-row gap-2 items-center border-t-[1px] ${
-            index == routeDirections!.length - 1 ? "border-b-[1px] mb-10" : ""
+            index == routeDirections.length - 1 ? "border-b-[1px] mb-10" : ""
           }  border-[#D3DAE0] cursor-pointer group py-2 `}
           onClick={() => {
             handleSetNextTurnIndex(index);
