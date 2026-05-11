@@ -6,6 +6,9 @@ import { Toaster } from "react-hot-toast";
 export const metadata: Metadata = {
   title: "NavigatorX",
   description: "osm routing engine",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 export const viewport: Viewport = {
   width: "device-width",
