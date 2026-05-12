@@ -17,11 +17,20 @@ import { IoIosArrowBack } from "react-icons/io";
 import Image from "next/image";
 import { FaCheck, FaLocationArrow } from "react-icons/fa6";
 import { FaCircle } from "react-icons/fa6";
-import toast from "react-hot-toast";
 import { AiOutlineThunderbolt } from "react-icons/ai";
 import { RxCross1 } from "react-icons/rx";
 import { Badge } from "./badge";
 import { Spinner } from "./spinner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const formatTime = (minutes: number): string => {
   return new Intl.NumberFormat("id-ID", {
@@ -46,6 +55,7 @@ function StartingNavigationBadge() {
 
 export const Router = React.memo(function Router(props: RouterProps) {
   const [showDirectionsState, setShowDirectionsState] = useState(false);
+  const [showAppPrompt, setShowAppPrompt] = useState(false);
 
   const [nowTime, setNowTime] = useState<Date | null>(() => new Date());
   const {
@@ -95,6 +105,7 @@ export const Router = React.memo(function Router(props: RouterProps) {
             handleShowDirections,
             props.handleSetNextTurnIndex,
             nowTime,
+            setShowAppPrompt,
           )}
           {showRouteResult(
             props,
@@ -105,6 +116,7 @@ export const Router = React.memo(function Router(props: RouterProps) {
             props.handleSetNextTurnIndex,
             props.handleStartRoute,
             nowTime,
+            setShowAppPrompt,
           )}
           {showRouteEtaAndDistance(
             props,
@@ -208,6 +220,32 @@ export const Router = React.memo(function Router(props: RouterProps) {
           </button>
         </div>
       )}
+      <AlertDialog open={showAppPrompt} onOpenChange={setShowAppPrompt}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Use NavigatorX App</AlertDialogTitle>
+            <AlertDialogDescription>
+              For turn-by-turn navigation use the navigatorx app
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowAppPrompt(false)}>
+              No thanks
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                window.open(
+                  "https://github.com/lintang-b-s/navigatorx-rn/releases/tag/v0.0.3",
+                  "_blank"
+                );
+                setShowAppPrompt(false);
+              }}
+            >
+              Get The APP
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 });
@@ -222,6 +260,7 @@ function showRouteResultMobile(
   handleShowDirections: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
   nowTime: Date | null,
+  setShowAppPrompt: (show: boolean) => void,
 ) {
   const routeDirections = props.routeDataCRP?.[
     activeRoute
@@ -292,8 +331,7 @@ function showRouteResultMobile(
                        focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                        cursor-pointer disabled:cursor-wait disabled:bg-blue-400 disabled:opacity-80 aria-disabled:opacity-50 space-x-2 gap-x-1`}
                   onClick={(_e) => {
-                    handleStartRoute(true);
-                    props.handleDirectionActive(true);
+                    setShowAppPrompt(true);
                   }}
                 >
                   {props.isStartingNavigation ? (
@@ -393,8 +431,7 @@ function showRouteResultMobile(
                        focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                        cursor-pointer disabled:cursor-wait disabled:bg-blue-400 disabled:opacity-80 aria-disabled:opacity-50 space-x-2 gap-x-1`}
                   onClick={(_e) => {
-                    handleStartRoute(true);
-                    props.handleDirectionActive(true);
+                    setShowAppPrompt(true);
                   }}
                 >
                   {props.isStartingNavigation ? (
@@ -612,6 +649,7 @@ function showRouteResult(
   handleSetNextTurnIndex: (index: number) => void,
   handleStartRoute: (start: boolean) => void,
   nowTime: Date | null,
+  setShowAppPrompt: (show: boolean) => void,
 ) {
   return (
     <div
@@ -749,6 +787,7 @@ function showRouteResult(
           props.handleDirectionActive,
           handleSetNextTurnIndex,
           handleStartRoute,
+          setShowAppPrompt,
         )
       )}
     </div>
@@ -762,6 +801,7 @@ function showRouteDirectionsComponent(
   handleDirectionActive: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
   _handleStartRoute: (start: boolean) => void,
+  setShowAppPrompt: (show: boolean) => void,
 ) {
   const routeDirections = route.driving_directions.reduce<
     CumulativeDirection[]
@@ -811,10 +851,7 @@ function showRouteDirectionsComponent(
                      focus-visible:outline-offset-2 focus-visible:outline-blue-500 active:bg-blue-600 
                      cursor-pointer aria-disabled:opacity-50 ml-auto mr-2 py-3 `}
           onClick={(_e) => {
-            toast.error(
-              "Navigate feature only available on mobile device view! ",
-              { duration: 1000 },
-            );
+            setShowAppPrompt(true);
           }}
         >
           <AiOutlineThunderbolt size={18} color="white" />
