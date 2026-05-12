@@ -10,7 +10,13 @@ import toast from "react-hot-toast";
 import { fetchAlternativeRoutes, RouteCRPResponse } from "./lib/navigatorxApi";
 import polyline from "@mapbox/polyline";
 import { LineData } from "./types/definition";
-import { Candidate, Coord, Gps, MapMatchRequest, MapMatchResponse } from "./lib/mapmatchApi";
+import {
+  Candidate,
+  Coord,
+  Gps,
+  MapMatchRequest,
+  MapMatchResponse,
+} from "./lib/mapmatchApi";
 import { haversineDistance, mercatorDistance } from "./lib/util";
 import {
   getCurrentUserDirectionIndex,
@@ -138,9 +144,9 @@ export default function Home() {
   const [isAlternativeChecked, setIsAlternativeChecked] = useState(false);
   const [isFetchingRoutes, setIsFetchingRoutes] = useState(false);
 
-  const [lastFocused, setLastFocused] = useState<"source" | "destination" | null>(
-    null
-  );
+  const [lastFocused, setLastFocused] = useState<
+    "source" | "destination" | null
+  >(null);
   const [showResult, setShowResult] = useState(false);
 
   const [nextTurnIndex, setNextTurnIndex] = useState(-1);
@@ -243,7 +249,8 @@ export default function Home() {
   ]);
 
   // Derived state for search result visibility
-  const isAnythingFocused = (isSourceFocused && !!source) || (isDestinationFocused && !!destination);
+  const isAnythingFocused =
+    (isSourceFocused && !!source) || (isDestinationFocused && !!destination);
   const actualShowResult = isAnythingFocused && showResult;
 
   const pushParam = useCallback(
@@ -288,7 +295,6 @@ export default function Home() {
     setIsDestinationFocused(val);
     if (val) setLastFocused("destination");
   }, []);
-
 
   const onHandleGetRoutes = async (
     e: MouseEvent<HTMLButtonElement, MouseEvent>,
@@ -372,7 +378,11 @@ export default function Home() {
         },
         distance: 0,
       };
-      const target = isSource ? "source" : isDestinationFocused ? "destination" : lastFocused;
+      const target = isSource
+        ? "source"
+        : isDestinationFocused
+          ? "destination"
+          : lastFocused;
 
       if (target === "source") {
         setSourceLoc(newUserLoc);
@@ -381,7 +391,6 @@ export default function Home() {
         setDestinationLoc(newUserLoc);
         pushParam("destination", newUserLoc);
       }
-
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error(message, { duration: 1000 });
@@ -446,7 +455,7 @@ export default function Home() {
       if (firstRouteEdgeID) {
         mapMatchStep.current = 1;
         candidates.current = [
-          { edge_id: firstRouteEdgeID, weight: 1.0, length: 0 },
+          { roadnetwork_edge_id: firstRouteEdgeID, weight: 1.0, length: 0 },
         ];
       } else {
         mapMatchStep.current = 1;
@@ -463,7 +472,7 @@ export default function Home() {
         distanceTraveled: 0,
       });
       setSnappedEdgeID(0);
-      
+
       // Reset internal navigation refs/state
       mapMatchStep.current = 1;
       candidates.current = [];
@@ -605,7 +614,7 @@ export default function Home() {
             });
           }
 
-          setSnappedEdgeID(resp.data.matched_gps_point.edge_id);
+          setSnappedEdgeID(resp.data.matched_gps_point.roadnetwork_edge_id);
         } catch (_e) {
           toast.error("Failed to process map match result", { duration: 800 });
         }
@@ -1104,7 +1113,8 @@ export default function Home() {
   }, []);
 
   // Adjust activeRoute if it's out of bounds (during render)
-  const safeActiveRoute = (routeData && activeRoute >= routeData.length) ? 0 : activeRoute;
+  const safeActiveRoute =
+    routeData && activeRoute >= routeData.length ? 0 : activeRoute;
   if (safeActiveRoute !== activeRoute) {
     setActiveRoute(safeActiveRoute);
   }
@@ -1133,7 +1143,6 @@ export default function Home() {
       <Router
         sourceSearchActive={handleFocusSourceSearch}
         destinationSearchActive={handleFocusDestinationSearch}
-
         onHandleGetRoutes={onHandleGetRoutes}
         isFetchingRoutes={isFetchingRoutes}
         isSourceFocused={isSourceFocused}

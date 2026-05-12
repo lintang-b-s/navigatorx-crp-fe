@@ -8,7 +8,7 @@ export interface Coord {
 }
 
 export interface Candidate {
-  edge_id: number;
+  roadnetwork_edge_id: number;
   weight: number;
   length: number;
 }
@@ -24,7 +24,7 @@ export interface Gps {
 
 export interface MatchedGpsPoint {
   gps_point: Gps;
-  edge_id: number;
+  roadnetwork_edge_id: number;
   matched_coord: Coord;
   predicted_gps_coord: Coord;
   edge_initial_bearing: number;
