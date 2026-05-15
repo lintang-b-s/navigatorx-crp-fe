@@ -5,6 +5,15 @@ import axios from "axios";
  */
 export interface Direction {
   instruction: string;
+  annotation?: {
+    duration: number[];
+    distance: number[];
+    geometry: {
+      lat: number;
+      lon: number;
+    }[];
+    edge_geometry_offset: number[];
+  };
   turn_point: {
     lat: number;
     lon: number;
@@ -85,7 +94,7 @@ export const fetchRouteCRP = async ({
   startEdgeId,
 }: RouteRequest): Promise<RouteCRPResponseWrapper> => {
   try {
-    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}${reroute ? "&reroute=true" : ""}`;
+    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&useAnnotation=true${reroute ? "&reroute=true" : ""}`;
 
     if (startEdgeId !== undefined && startEdgeId !== -1) {
       url += `&start_edge_id=${startEdgeId}`;
@@ -139,7 +148,7 @@ export const fetchAlternativeRoutes = async ({
   startEdgeId,
 }: RouteRequest): Promise<AlternativeRoutesResponse> => {
   try {
-    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2${reroute ? "&reroute=true" : ""}`;
+    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2&useAnnotation=true${reroute ? "&reroute=true" : ""}`;
 
     if (startEdgeId !== undefined && startEdgeId !== -1) {
       url += `&start_edge_id=${startEdgeId}`;
@@ -152,5 +161,3 @@ export const fetchAlternativeRoutes = async ({
     throw new Error("Failed to fetch search results");
   }
 };
-
-
