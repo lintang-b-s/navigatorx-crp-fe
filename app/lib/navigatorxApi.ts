@@ -8,10 +8,7 @@ export interface Direction {
   annotation?: {
     duration: number[];
     distance: number[];
-    geometry: {
-      lat: number;
-      lon: number;
-    }[];
+    geometry: string;
     edge_geometry_offset: number[];
   };
   turn_point: {
@@ -20,8 +17,8 @@ export interface Direction {
   };
   street_name: string;
   travel_time: number; // Duration of this specific segment in minutes
-  distance: number;    // Distance of this specific segment in Kilometers
-  edge_ids: number[];  // OSM Edge IDs making up this road
+  distance: number; // Distance of this specific segment in Kilometers
+  edge_ids: number[]; // OSM Edge IDs making up this road
   polyline: string;
   turn_bearing: number;
   turn_type: string;
@@ -71,8 +68,6 @@ export interface AlternativeRoutesResponse {
   };
 }
 
-
-
 export interface BoundingBoxResponse {
   min_lat: number;
   min_lon: number;
@@ -94,7 +89,7 @@ export const fetchRouteCRP = async ({
   startEdgeId,
 }: RouteRequest): Promise<RouteCRPResponseWrapper> => {
   try {
-    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&useAnnotation=true${reroute ? "&reroute=true" : ""}`;
+    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&useAnnotation=false${reroute ? "&reroute=true" : ""}`;
 
     if (startEdgeId !== undefined && startEdgeId !== -1) {
       url += `&start_edge_id=${startEdgeId}`;
@@ -108,8 +103,7 @@ export const fetchRouteCRP = async ({
       if (error.response.status === 502) {
         throw new Error("navigatorx routing engine sedang ada perbaikan");
       } else if (error.response.status === 400) {
-        const backendMessage =
-          (error.response.data?.message ??
+        const backendMessage = (error.response.data?.message ??
           error.response.data?.error ??
           error.response.data?.detail) as string | undefined;
 
@@ -120,7 +114,7 @@ export const fetchRouteCRP = async ({
         throw new Error("Bad request");
       } else {
         throw new Error(
-          `Server error (${error.response.status}): ${error.response.statusText}`
+          `Server error (${error.response.status}): ${error.response.statusText}`,
         );
       }
     } else {
@@ -148,7 +142,7 @@ export const fetchAlternativeRoutes = async ({
   startEdgeId,
 }: RouteRequest): Promise<AlternativeRoutesResponse> => {
   try {
-    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2&useAnnotation=true${reroute ? "&reroute=true" : ""}`;
+    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2&useAnnotation=false${reroute ? "&reroute=true" : ""}`;
 
     if (startEdgeId !== undefined && startEdgeId !== -1) {
       url += `&start_edge_id=${startEdgeId}`;
