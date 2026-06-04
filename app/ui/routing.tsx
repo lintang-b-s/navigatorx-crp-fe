@@ -100,7 +100,6 @@ export const Router = React.memo(function Router(props: RouterProps) {
             safeActiveRoute,
             props.handleRouteClick,
             props.routeStarted,
-            props.handleStartRoute,
             showDirections,
             handleShowDirections,
             props.handleSetNextTurnIndex,
@@ -114,7 +113,6 @@ export const Router = React.memo(function Router(props: RouterProps) {
             showDirections,
             handleShowDirections,
             props.handleSetNextTurnIndex,
-            props.handleStartRoute,
             nowTime,
             setShowAppPrompt,
           )}
@@ -122,7 +120,6 @@ export const Router = React.memo(function Router(props: RouterProps) {
             props,
             safeActiveRoute,
             props.routeStarted,
-            props.handleStartRoute,
             nowTime,
           )}
         </>
@@ -236,7 +233,7 @@ export const Router = React.memo(function Router(props: RouterProps) {
               onClick={() => {
                 window.open(
                   "https://github.com/lintang-b-s/navigatorx-rn/releases/tag/v0.0.3",
-                  "_blank"
+                  "_blank",
                 );
                 setShowAppPrompt(false);
               }}
@@ -255,7 +252,6 @@ function showRouteResultMobile(
   activeRoute: number,
   handleRouteClick: (index: number) => void,
   routeStarted = false,
-  handleStartRoute: (show: boolean) => void,
   showDirections = false,
   handleShowDirections: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
@@ -582,7 +578,6 @@ function showRouteEtaAndDistance(
   props: RouterProps,
   activeRoute: number,
   routeStarted = false,
-  handleStartRoute: (show: boolean) => void,
   nowTime: Date | null,
 ) {
   const totalTime = props.routeDataCRP?.[activeRoute]?.travel_time ?? 0;
@@ -628,12 +623,7 @@ function showRouteEtaAndDistance(
         </div>
       </div>
 
-      <button
-        className="flex flex-row justify-center items-center h-14 w-14 bg-[#dedfe0] rounded-full"
-        onClick={() => {
-          handleStartRoute(false);
-        }}
-      >
+      <button className="flex flex-row justify-center items-center h-14 w-14 bg-[#dedfe0] rounded-full">
         <RxCross1 size={18} color="#222831" />
       </button>
     </div>
@@ -647,7 +637,6 @@ function showRouteResult(
   showDirections = false,
   handleShowDirections: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
-  handleStartRoute: (start: boolean) => void,
   nowTime: Date | null,
   setShowAppPrompt: (show: boolean) => void,
 ) {
@@ -786,7 +775,6 @@ function showRouteResult(
           handleShowDirections,
           props.handleDirectionActive,
           handleSetNextTurnIndex,
-          handleStartRoute,
           setShowAppPrompt,
         )
       )}
@@ -800,7 +788,6 @@ function showRouteDirectionsComponent(
   handleShowDirections: (show: boolean) => void,
   handleDirectionActive: (show: boolean) => void,
   handleSetNextTurnIndex: (index: number) => void,
-  _handleStartRoute: (start: boolean) => void,
   setShowAppPrompt: (show: boolean) => void,
 ) {
   const routeDirections = route.driving_directions.reduce<

@@ -27,7 +27,6 @@ export interface RouterProps {
   handleRouteClick: (index: number) => void;
   handleDirectionActive: (show: boolean) => void;
   handleSetNextTurnIndex: (index: number) => void;
-  handleStartRoute: (start: boolean) => void;
   distanceFromNextTurnPoint: number;
   currentDirectionIndex: number;
   userLoc: UserLocation;

@@ -18,8 +18,6 @@ export interface Direction {
   street_name: string;
   travel_time: number; // Duration of this specific segment in minutes
   distance: number; // Distance of this specific segment in Kilometers
-  edge_ids: number[]; // OSM Edge IDs making up this road
-  polyline: string;
   turn_bearing: number;
   turn_type: string;
   suggest_alternatives?: boolean; // Indicates if the backend recommends checking alternatives here
