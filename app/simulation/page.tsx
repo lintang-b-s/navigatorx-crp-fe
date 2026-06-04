@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import axios from "axios";
 import { SimulationPanel } from "@/app/ui/simulationPanel";
-import { Coord, MapMatchRequest, Candidate, MapMatchResponse } from "@/app/lib/mapmatchApi";
+import {
+  Coord,
+  MapMatchRequest,
+  Candidate,
+  MapMatchResponse,
+} from "@/app/lib/mapmatchApi";
 import { haversineDistance, project } from "@/app/lib/util";
 import gsap from "gsap";
 import {
@@ -123,8 +128,12 @@ export default function SimulationPage() {
   }, [snappedEdgeID]);
 
   // Memoized props for MapComponent to prevent unnecessary re-renders
-  const handleSelectSource = useCallback(() => { /* noop */ }, []);
-  const handleSelectDestination = useCallback(() => { /* noop */ }, []);
+  const handleSelectSource = useCallback(() => {
+    /* noop */
+  }, []);
+  const handleSelectDestination = useCallback(() => {
+    /* noop */
+  }, []);
 
   const onSimulationStop = useCallback(() => {
     setIsRunning(false);
@@ -138,7 +147,12 @@ export default function SimulationPage() {
   }, []);
   const onSimulationStart = useCallback(
     async (
-      points: { Latitude: number; Longitude: number; datetime_utc: string; speed?: number }[],
+      points: {
+        Latitude: number;
+        Longitude: number;
+        datetime_utc: string;
+        speed?: number;
+      }[],
       useWebSocket: boolean,
       showGpsWindow: boolean,
       drivingDirection: boolean,
@@ -222,6 +236,7 @@ export default function SimulationPage() {
           srcLon: firstPoint.Longitude,
           destLat: lastPoint.Latitude,
           destLon: lastPoint.Longitude,
+          useAnnotation: true,
         };
         const processedRoutes = await routingWorker.fetchAndProcessRoutes(
           reqBody,
@@ -246,7 +261,8 @@ export default function SimulationPage() {
       } catch (error: unknown) {
         console.error("Failed to fetch initial route:", error);
         if (drivingDirection) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           toast.error("Failed to fetch initial route: " + message);
         }
       }
@@ -255,7 +271,12 @@ export default function SimulationPage() {
       let speedMeanK = 8.3333;
       let speedStdK = 8.3333;
 
-      let prev: { Latitude: number; Longitude: number; datetime_utc: string; speed?: number } | null = null;
+      let prev: {
+        Latitude: number;
+        Longitude: number;
+        datetime_utc: string;
+        speed?: number;
+      } | null = null;
       let lastBearing = 0.0;
 
       const httpUrl =
@@ -372,10 +393,12 @@ export default function SimulationPage() {
               socketRef.current?.readyState === WebSocket.OPEN
             ) {
               socketRef.current.send(JSON.stringify(mapMatchRequest));
-              const msg = await new Promise<{ data: MapMatchResponse }>((resolve) => {
-                socketRef.current!.onmessage = (event) =>
-                  resolve(JSON.parse(event.data));
-              });
+              const msg = await new Promise<{ data: MapMatchResponse }>(
+                (resolve) => {
+                  socketRef.current!.onmessage = (event) =>
+                    resolve(JSON.parse(event.data));
+                },
+              );
               apiResponse = { data: msg.data };
             } else {
               apiResponse = await axios.post(httpUrl, mapMatchRequest);
@@ -384,7 +407,8 @@ export default function SimulationPage() {
 
           if (apiResponse?.data) {
             if (
-              apiResponse.data.matched_gps_point?.matched_coord?.lat === INVALID_LAT &&
+              apiResponse.data.matched_gps_point?.matched_coord?.lat ===
+                INVALID_LAT &&
               apiResponse.data.matched_gps_point.matched_coord.lon ===
                 INVALID_LON
             ) {
@@ -407,9 +431,7 @@ export default function SimulationPage() {
             lastBearing = apiResponse.data.edge_initial_bearing;
             const targetHeading = normalizeBearing(lastBearing);
 
-            if (
-              apiResponse.data.matched_gps_point?.matched_coord
-            ) {
+            if (apiResponse.data.matched_gps_point?.matched_coord) {
               const matched = apiResponse.data.matched_gps_point.matched_coord;
               if (!currentGpsLocRef.current) {
                 currentGpsLocRef.current = {
@@ -422,7 +444,6 @@ export default function SimulationPage() {
                 await new Promise((resolve) => setTimeout(resolve, 50));
               } else {
                 const duration = dt_seconds;
-
 
                 // Calculate continuous target heading to avoid spinning the long way
                 let diff = targetHeading - currentHeadingRef.current;
@@ -524,6 +545,7 @@ export default function SimulationPage() {
                           destLon: lastPoint.Longitude,
                           reroute: true,
                           startEdgeId: currentEdgeID,
+                          useAnnotation: true,
                         });
 
                         const newAlternatives =
@@ -618,6 +640,7 @@ export default function SimulationPage() {
                         destLon: lastPoint.Longitude,
                         reroute: true,
                         startEdgeId: currentEdgeID,
+                        useAnnotation: true,
                       };
                       const processedRoutes =
                         await routingWorker.fetchAndProcessRoutes(

@@ -59,6 +59,7 @@ export interface RouteRequest {
   destLon: number;
   reroute?: boolean;
   startEdgeId?: number;
+  useAnnotation: boolean;
 }
 
 export interface AlternativeRoutesResponse {
@@ -86,9 +87,10 @@ export const fetchRouteCRP = async ({
   destLon,
   reroute = false,
   startEdgeId,
+  useAnnotation,
 }: RouteRequest): Promise<RouteCRPResponseWrapper> => {
   try {
-    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&useAnnotation=false${reroute ? "&reroute=true" : ""}`;
+    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&useAnnotation=${useAnnotation}${reroute ? "&reroute=true" : ""}`;
 
     if (startEdgeId !== undefined && startEdgeId !== -1) {
       url += `&start_edge_id=${startEdgeId}`;
@@ -139,9 +141,10 @@ export const fetchAlternativeRoutes = async ({
   destLon,
   reroute = false,
   startEdgeId,
+  useAnnotation,
 }: RouteRequest): Promise<AlternativeRoutesResponse> => {
   try {
-    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2&useAnnotation=false${reroute ? "&reroute=true" : ""}`;
+    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2&useAnnotation=${useAnnotation}${reroute ? "&reroute=true" : ""}`;
 
     if (startEdgeId !== undefined && startEdgeId !== -1) {
       url += `&start_edge_id=${startEdgeId}`;

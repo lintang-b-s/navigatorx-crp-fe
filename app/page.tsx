@@ -318,6 +318,7 @@ export default function Home() {
         srcLon: sourceLoc.osm_object.lon,
         destLat: destinationLoc.osm_object.lat,
         destLon: destinationLoc.osm_object.lon,
+        useAnnotation: false,
       };
 
       const processedRoutes = await routingWorker.fetchAndProcessRoutes(
