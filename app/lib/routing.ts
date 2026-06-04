@@ -12,7 +12,8 @@ export function isUserOffTheRoute({
   // Use a Set for O(1) lookup instead of nested O(D×E) loops
   const edgeSet = new Set<number>();
   for (const direction of routeData.driving_directions) {
-    for (const edgeID of direction.edge_ids) {
+    const edgeIds = direction.annotation?.edge_ids ?? [];
+    for (const edgeID of edgeIds) {
       edgeSet.add(edgeID);
     }
   }
@@ -20,7 +21,7 @@ export function isUserOffTheRoute({
   if (edgeSet.has(snappedEdgeID)) {
     return false;
   }
-  
+
   return true;
 }
 
@@ -39,7 +40,8 @@ export function getCurrentUserDirectionIndex({
 
   for (let i = 0; i < drivingDirections.length; i++) {
     const direction = drivingDirections[i];
-    for (const directionEdgeID of direction.edge_ids) {
+    const edgeIds = direction.annotation?.edge_ids ?? [];
+    for (const directionEdgeID of edgeIds) {
       if (snappedEdgeID === directionEdgeID) {
         return i;
       }
@@ -66,13 +68,13 @@ export function getDistanceFromUserToNextTurn({
     matchedGpsLoc.lat,
     matchedGpsLoc.lon,
     nextTurnPoint.lat,
-    nextTurnPoint.lon
+    nextTurnPoint.lon,
   );
 }
 
 /**
  * Checks if the user is approaching a "Decision Point" where alternative routes should be suggested.
- * This is triggered based on a specific 'suggest_alternatives' flag in the route data 
+ * This is triggered based on a specific 'suggest_alternatives' flag in the route data
  * and a proximity to the end of the current step.
  */
 export function isNearEndOfSuggestAlternativesStep({
@@ -87,6 +89,6 @@ export function isNearEndOfSuggestAlternativesStep({
   const currentDirection = drivingDirections[currentIndex];
   if (!currentDirection?.suggest_alternatives) return false;
 
-  const lastThreeEdges = currentDirection.edge_ids.slice(-3);
-  return lastThreeEdges.includes(snappedEdgeID);
+  const lastThreeEdges = currentDirection.annotation?.edge_ids?.slice(-3);
+  return (lastThreeEdges ?? []).includes(snappedEdgeID);
 }

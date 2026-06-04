@@ -70,26 +70,13 @@ const normalizeBearing = (bearing: number) => {
 export default function Home() {
   // REFS: Used for high-frequency updates (60fps) to avoid React re-render lag.
   // We perform math in refs, then sync to state at a controlled rate for the UI.
-  const isReroutingRef = useRef(false);
   const routeDataRef = useRef<RouteCRPResponse[] | undefined>(undefined);
   const activeRouteRef = useRef(0);
   const snappedEdgeIDRef = useRef(-1);
   const currentGpsLocRef = useRef<Coord | null>(null);
   const currentHeadingRef = useRef<number>(0);
-  const lastMatchedPointRef = useRef<Coord | null>(null);
-  const startTimeRef = useRef<Date | null>(null);
-  const totalDistanceTraveledRef = useRef<number>(0);
 
-  const candidates = useRef<Candidate[]>([]);
-  const speedMeanK = useRef<number>(8.3333);
-  const speedStdK = useRef<number>(8.3333);
-  const lastBearing = useRef<number>(0.0);
-  const prevGps = useRef<Gps>(undefined);
-  const mapMatchStep = useRef<number>(1);
-  const deadReckoning = useRef<boolean>(false);
-  const isInitialReroutePerformed = useRef<boolean>(false);
   const lastFetchedAlternativesStep = useRef<number>(-1);
-  const hasArrived = useRef(false);
 
   const [snappedEdgeID, setSnappedEdgeID] = useState<number>(-1);
   const [routeStarted, setRouteStarted] = useState(false);

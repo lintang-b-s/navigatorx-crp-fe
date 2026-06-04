@@ -9,6 +9,7 @@ export interface Direction {
     duration: number[];
     distance: number[];
     geometry: string;
+    edge_ids: number[];
     edge_geometry_offset: number[];
   };
   turn_point: {
