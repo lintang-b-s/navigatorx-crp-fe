@@ -22,7 +22,6 @@ import { IoLocationSharp } from "react-icons/io5";
 
 import { fetchBoundingBox } from "../lib/navigatorxApi";
 import { TileMath } from "../lib/azure_maps_zoom_tiles";
-import { project, unproject } from "../lib/util";
 import Image from "next/image";
 
 const ACTIVE_ROUTE_COLOR = "#470DF9";
@@ -175,11 +174,6 @@ export const MapComponent = React.memo(function MapComponent({
     }));
   }
 
-  const activeRouteCoordinates =
-    activeRoute === 0
-      ? lineData?.geometry.coordinates
-      : alternativeRoutes?.[activeRoute]?.geometry.coordinates;
-
   const zoomBasedTurnScale = Math.max(
     0,
     Math.min(1, (viewState.zoom - 10) / (17 - 10)),
@@ -212,22 +206,14 @@ export const MapComponent = React.memo(function MapComponent({
     };
   }, [activeRoute, alternativeRoutes]);
 
-  // Memoize turn marker positions to avoid O(N×M) findClosestPointOnRoute per render
   const turnMarkers = useMemo(() => {
     if (!isDirectionActive || !routeDataCRP?.[activeRoute]?.driving_directions)
       return [];
-    return routeDataCRP[activeRoute].driving_directions.map((turn) => {
-      const turnIcon = getTurnIconDirection(turn.turn_type);
-
-      const turnPointOnPolyline = findClosestPointOnRoute(
-        turn.turn_point.lon,
-        turn.turn_point.lat,
-        activeRouteCoordinates,
-      );
-
-      return { turn, turnIcon, turnPointOnPolyline };
-    });
-  }, [isDirectionActive, routeDataCRP, activeRoute, activeRouteCoordinates]);
+    return routeDataCRP[activeRoute].driving_directions.map((turn) => ({
+      turn,
+      turnIcon: getTurnIconDirection(turn.turn_type),
+    }));
+  }, [isDirectionActive, routeDataCRP, activeRoute]);
 
   const gpsWindowGeoJSON = useMemo(() => {
     if (!gpsWindowPoints || gpsWindowPoints.length === 0) return null;
@@ -419,15 +405,15 @@ export const MapComponent = React.memo(function MapComponent({
       )}
 
       {isDirectionActive &&
-        turnMarkers.map(({ turn, turnIcon, turnPointOnPolyline }, i) => {
+        turnMarkers.map(({ turn, turnIcon }, i) => {
           if (turnIcon === "" || turnIconSize <= 0) {
             return null;
           }
           return (
             <Marker
               key={`turn-${i}`}
-              longitude={turnPointOnPolyline[0]}
-              latitude={turnPointOnPolyline[1]}
+              longitude={turn.turn_point.lon}
+              latitude={turn.turn_point.lat}
               anchor="center"
             >
               <Image
@@ -574,72 +560,6 @@ function getTurnIconDirection(turnType: string): string {
       return `/icons_white/merge_onto.png`;
   }
   return "";
-}
-
-function scalarProjection(
-  dx: number,
-  dy: number,
-  dx0: number,
-  dy0: number,
-): number {
-  const roadNorm = dx * dx + dy * dy;
-
-  let t = 0;
-  if (roadNorm > 0) {
-    t = Math.max(0, Math.min(1, (dx0 * dx + dy0 * dy) / roadNorm));
-  }
-  return t;
-}
-
-function findClosestPointOnRoute(
-  lon: number,
-  lat: number,
-  coordinates?: number[][],
-): [number, number] {
-  if (!coordinates || coordinates.length === 0) {
-    return [lon, lat];
-  }
-
-  const p0 = project(lat, lon);
-
-  let minDistance = Number.POSITIVE_INFINITY;
-  let closestPoint: [number, number] = [lon, lat];
-
-  for (let i = 0; i < coordinates.length - 1; i++) {
-    const c1 = coordinates[i];
-    const c2 = coordinates[i + 1];
-
-    const p1 = project(c1[1], c1[0]);
-    const p2 = project(c2[1], c2[0]);
-
-    // c1->c2 vector
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-
-    // c1 -> turn_point vector
-    const dx0 = p0.x - p1.x;
-    const dy0 = p0.y - p1.y;
-
-    const t = scalarProjection(dx, dy, dx0, dy0);
-
-    const projX = p1.x + t * dx;
-    const projY = p1.y + t * dy;
-
-    const distSq = (p0.x - projX) ** 2 + (p0.y - projY) ** 2;
-    if (distSq < minDistance) {
-      minDistance = distSq;
-      // Interpolate the exact closest point on the segment
-      const foot = unproject(projX, projY);
-      closestPoint = [foot.lon, foot.lat];
-    }
-  }
-
-  // If the polyline only has 1 point, the loop doesn't run, fallback to vertex
-  if (coordinates.length === 1) {
-    return [coordinates[0][0], coordinates[0][1]];
-  }
-
-  return closestPoint;
 }
 
 function getRouteFittedViewState(coordinates: number[][]): {
