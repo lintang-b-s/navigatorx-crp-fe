@@ -77,7 +77,7 @@ export const MapComponent = React.memo(function MapComponent({
   }>({
     longitude: 110.37432,
     latitude: -7.78787,
-    zoom: 13,
+    zoom: 5,
     bearing: 0,
     pitch: 0,
   });
