@@ -9,8 +9,9 @@ export interface Direction {
     duration: number[];
     distance: number[];
     geometry: string;
-    edge_ids: number[];
-    edge_geometry_offset: number[];
+    segment_ids: number[];
+    segment_geometry_offset: number[];
+    edge_ids?: number[];
   };
   turn_point: {
     lat: number;
@@ -64,7 +65,7 @@ export interface RouteRequest {
 
 export interface AlternativeRoutesResponse {
   data: {
-    alternative_routes: RouteCRPResponse[];
+    routes: RouteCRPResponse[];
   };
 }
 
@@ -78,6 +79,35 @@ export interface BoundingBoxResponse {
 export interface BoundingBoxWrapper {
   data: BoundingBoxResponse;
 }
+
+const getRouteError = (error: unknown): Error => {
+  if (axios.isAxiosError(error) && error.response) {
+    if (error.response.status === 502) {
+      return new Error("navigatorx routing engine sedang ada perbaikan");
+    } else if (error.response.status === 400) {
+      const backendMessage = (error.response.data?.error?.message ??
+        error.response.data?.message ??
+        (typeof error.response.data?.error === "string"
+          ? error.response.data.error
+          : undefined)) as string | undefined;
+
+      if (typeof backendMessage === "string" && backendMessage.trim()) {
+        return new Error(backendMessage);
+      }
+
+      return new Error("Bad request");
+    } else {
+      const backendMessage = error.response.data?.error?.message;
+      if (typeof backendMessage === "string" && backendMessage.trim()) {
+        return new Error(backendMessage);
+      }
+      return new Error(
+        `Server error (${error.response.status}): ${error.response.statusText}`,
+      );
+    }
+  }
+  return new Error("navigatorx routing engine sedang ada perbaikan");
+};
 
 // for https://github.com/lintang-b-s/Navigatorx
 export const fetchRouteCRP = async ({
@@ -100,27 +130,7 @@ export const fetchRouteCRP = async ({
 
     return data as RouteCRPResponseWrapper;
   } catch (error: unknown) {
-    if (axios.isAxiosError(error) && error.response) {
-      if (error.response.status === 502) {
-        throw new Error("navigatorx routing engine sedang ada perbaikan");
-      } else if (error.response.status === 400) {
-        const backendMessage = (error.response.data?.message ??
-          error.response.data?.error ??
-          error.response.data?.detail) as string | undefined;
-
-        if (typeof backendMessage === "string" && backendMessage.trim()) {
-          throw new Error(backendMessage);
-        }
-
-        throw new Error("Bad request");
-      } else {
-        throw new Error(
-          `Server error (${error.response.status}): ${error.response.statusText}`,
-        );
-      }
-    } else {
-      throw new Error("navigatorx routing engine sedang ada perbaikan");
-    }
+    throw getRouteError(error);
   }
 };
 
@@ -134,7 +144,7 @@ export const fetchBoundingBox = async (): Promise<BoundingBoxWrapper> => {
   }
 };
 
-export const fetchAlternativeRoutes = async ({
+export const fetchRouteWithAlternatives = async ({
   srcLat,
   srcLon,
   destLat,
@@ -144,7 +154,7 @@ export const fetchAlternativeRoutes = async ({
   useAnnotation,
 }: RouteRequest): Promise<AlternativeRoutesResponse> => {
   try {
-    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeAlternativeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&k=2&useAnnotation=${useAnnotation}${reroute ? "&reroute=true" : ""}`;
+    let url = `${process.env.NEXT_PUBLIC_ROUTER_API_URL}/api/computeRoutes?origin_lat=${srcLat}&origin_lon=${srcLon}&destination_lat=${destLat}&destination_lon=${destLon}&alternatives=true&k=2&useAnnotation=${useAnnotation}${reroute ? "&reroute=true" : ""}`;
 
     if (startEdgeId !== undefined && startEdgeId !== -1) {
       url += `&start_edge_id=${startEdgeId}`;
@@ -153,7 +163,7 @@ export const fetchAlternativeRoutes = async ({
     const { data } = await axios.get(url, {});
 
     return data as AlternativeRoutesResponse;
-  } catch {
-    throw new Error("Failed to fetch search results");
+  } catch (error: unknown) {
+    throw getRouteError(error);
   }
 };

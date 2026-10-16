@@ -28,7 +28,7 @@ declare global {
     candidates: Candidate[];
     speed_mean_k: number;
     speed_std_k: number;
-    edge_initial_bearing: number;
+    segment_initial_bearing: number;
   };
 }
 

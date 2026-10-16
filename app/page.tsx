@@ -5,9 +5,12 @@ import { SearchResults } from "./ui/searchResult";
 import { MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { fetchReverseGeocoding, fetchSearch, Place } from "@/app/lib/searchApi";
-import { routingWorker } from "@/app/lib/routingWorkerProxy";
 import toast from "react-hot-toast";
-import { fetchAlternativeRoutes, RouteCRPResponse } from "./lib/navigatorxApi";
+import {
+  fetchRouteCRP,
+  fetchRouteWithAlternatives,
+  RouteCRPResponse,
+} from "./lib/navigatorxApi";
 import polyline from "@mapbox/polyline";
 import { LineData } from "./types/definition";
 import {
@@ -66,6 +69,25 @@ const MapComponent = dynamic(
 const normalizeBearing = (bearing: number) => {
   return ((bearing % 360) + 360) % 360;
 };
+
+const dummyRoute: LineData = {
+  type: "Feature",
+  geometry: {
+    type: "LineString",
+    coordinates: [
+      [-100, 40],
+      [-100, 40],
+    ],
+  },
+};
+
+const pathToLineData = (path: string): LineData => ({
+  type: "Feature",
+  geometry: {
+    type: "LineString",
+    coordinates: polyline.decode(path).map(([lat, lon]) => [lon, lat]),
+  },
+});
 
 export default function Home() {
   // REFS: Used for high-frequency updates (60fps) to avoid React re-render lag.
@@ -321,21 +343,26 @@ export default function Home() {
         useAnnotation: false,
       };
 
-      const processedRoutes = await routingWorker.fetchAndProcessRoutes(
-        reqBody,
-        isAlternativeChecked,
-      );
+      const routes: RouteCRPResponse[] = isAlternativeChecked
+        ? (await fetchRouteWithAlternatives(reqBody)).data.routes || []
+        : [(await fetchRouteCRP(reqBody)).data];
 
-      setActiveRoute(0);
-      setPolylineData(processedRoutes.mainLineData);
-
-      if (processedRoutes.alternativeRoutesLineData.length > 0) {
-        setAlternativeRoutesLineData(processedRoutes.alternativeRoutesLineData);
-      } else {
-        setAlternativeRoutesLineData([]);
+      if (routes.length === 0) {
+        throw new Error("No route found");
       }
 
-      setRouteData(processedRoutes.combinedRoutes);
+      routes.forEach((route) => {
+        route.distance = parseFloat((route.distance / 1000).toFixed(2));
+      });
+
+      setActiveRoute(0);
+      setPolylineData(pathToLineData(routes[0].path));
+      setAlternativeRoutesLineData(
+        routes.length > 1
+          ? [dummyRoute, ...routes.slice(1).map((r) => pathToLineData(r.path))]
+          : [],
+      );
+      setRouteData(routes);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error(message, { duration: 800 });

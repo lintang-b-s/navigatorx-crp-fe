@@ -14,7 +14,7 @@ import { haversineDistance, project } from "@/app/lib/util";
 import gsap from "gsap";
 import {
   RouteCRPResponse,
-  fetchAlternativeRoutes,
+  fetchRouteWithAlternatives,
 } from "@/app/lib/navigatorxApi";
 import { LineData } from "@/app/types/definition";
 import polyline from "@mapbox/polyline";
@@ -428,7 +428,7 @@ export default function SimulationPage() {
             candidates = apiResponse.data.candidates ?? [];
             speedMeanK = apiResponse.data.speed_mean_k;
             speedStdK = apiResponse.data.speed_std_k;
-            lastBearing = apiResponse.data.edge_initial_bearing;
+            lastBearing = apiResponse.data.segment_initial_bearing;
             const targetHeading = normalizeBearing(lastBearing);
 
             if (apiResponse.data.matched_gps_point?.matched_coord) {
@@ -538,7 +538,7 @@ export default function SimulationPage() {
                     void (async () => {
                       try {
                         const lastPoint = points[points.length - 1];
-                        const altResponse = await fetchAlternativeRoutes({
+                        const altResponse = await fetchRouteWithAlternatives({
                           srcLat: currentMatchedLoc.lat,
                           srcLon: currentMatchedLoc.lon,
                           destLat: lastPoint.Latitude,
@@ -548,8 +548,7 @@ export default function SimulationPage() {
                           useAnnotation: true,
                         });
 
-                        const newAlternatives =
-                          altResponse.data.alternative_routes;
+                        const newAlternatives = altResponse.data.routes;
                         if (newAlternatives.length > 0) {
                           const mainRoute = routeDataRef.current[0];
                           const combinedRoutes = [

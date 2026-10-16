@@ -12,7 +12,9 @@ export function isUserOffTheRoute({
   // Use a Set for O(1) lookup instead of nested O(D×E) loops
   const edgeSet = new Set<number>();
   for (const direction of routeData.driving_directions) {
-    const edgeIds = direction.annotation?.edge_ids ?? [];
+    const edgeIds =
+      direction.annotation?.segment_ids ??
+      [];
     for (const edgeID of edgeIds) {
       edgeSet.add(edgeID);
     }
@@ -40,7 +42,9 @@ export function getCurrentUserDirectionIndex({
 
   for (let i = 0; i < drivingDirections.length; i++) {
     const direction = drivingDirections[i];
-    const edgeIds = direction.annotation?.edge_ids ?? [];
+    const edgeIds =
+      direction.annotation?.segment_ids ??
+      [];
     for (const directionEdgeID of edgeIds) {
       if (snappedEdgeID === directionEdgeID) {
         return i;
@@ -89,6 +93,9 @@ export function isNearEndOfSuggestAlternativesStep({
   const currentDirection = drivingDirections[currentIndex];
   if (!currentDirection?.suggest_alternatives) return false;
 
-  const lastThreeEdges = currentDirection.annotation?.edge_ids?.slice(-3);
+  const lastThreeEdges = (
+    currentDirection.annotation?.segment_ids ??
+    currentDirection.annotation?.edge_ids
+  )?.slice(-3);
   return (lastThreeEdges ?? []).includes(snappedEdgeID);
 }

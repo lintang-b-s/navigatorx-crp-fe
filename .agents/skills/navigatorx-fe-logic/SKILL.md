@@ -109,7 +109,7 @@ Suggests alternative routes dynamically as the user approaches specific intersec
 
 - **Trigger**: Checked on every snapped edge update. Uses `isNearEndOfSuggestAlternativesStep`.
 - **Condition**: Checks if the current direction step has `suggest_alternatives == true`, and if the current `snappedEdgeID` is among the **last 3 edges** of this direction step's `edge_ids` array.
-- **Dynamic Fetch**: If the condition is met and it hasn't fetched alternatives for this specific direction index yet (`lastFetchedAlternativesStep`), it triggers an async background call to `fetchAlternativeRoutes(reqBody)` using `startEdgeId: snappedEdgeID`.
+- **Dynamic Fetch**: If the condition is met and it hasn't fetched alternatives for this specific direction index yet (`lastFetchedAlternativesStep`), it triggers an async background call to `fetchRouteWithAlternatives(reqBody)` using `startEdgeId: snappedEdgeID`.
 - **UI Update**: When the backend responds with new alternatives, it combines them with the _existing_ main route (`routeData[0]`) and updates `alternativeRoutesLineData`. These new alternative polylines instantly appear on the map as the user approaches the intersection, allowing them to visibly choose a new path without interrupting current navigation.
 
 ## 5. Search & Geocoding

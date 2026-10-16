@@ -1,5 +1,5 @@
 import * as Comlink from "comlink";
-import { fetchRouteCRP, fetchAlternativeRoutes, RouteRequest, RouteCRPResponseWrapper, AlternativeRoutesResponse, RouteCRPResponse } from "./navigatorxApi";
+import { fetchRouteCRP, fetchRouteWithAlternatives, RouteRequest, RouteCRPResponseWrapper, AlternativeRoutesResponse, RouteCRPResponse } from "./navigatorxApi";
 import polyline from "@mapbox/polyline";
 import { LineData } from "@/app/types/definition";
 
@@ -7,12 +7,12 @@ export class RoutingWorker {
   public async fetchAndProcessRoutes(reqBody: RouteRequest, includeAlternatives = true) {
     try {
       let newSpRouteData: RouteCRPResponseWrapper;
-      let alternativeRouteData: AlternativeRoutesResponse = { data: { alternative_routes: [] } };
+      let alternativeRouteData: AlternativeRoutesResponse = { data: { routes: [] } };
 
       if (includeAlternatives) {
         [newSpRouteData, alternativeRouteData] = await Promise.all([
           fetchRouteCRP(reqBody),
-          fetchAlternativeRoutes(reqBody),
+          fetchRouteWithAlternatives(reqBody),
         ]);
       } else {
         [newSpRouteData] = await Promise.all([fetchRouteCRP(reqBody)]);
@@ -22,7 +22,7 @@ export class RoutingWorker {
         (newSpRouteData.data.distance / 1000).toFixed(2),
       );
       
-      const newAlternatives = alternativeRouteData?.data?.alternative_routes || [];
+      const newAlternatives = alternativeRouteData?.data?.routes || [];
       newAlternatives.forEach((alt: RouteCRPResponse) => {
         alt.distance = parseFloat((alt.distance / 1000).toFixed(2));
       });

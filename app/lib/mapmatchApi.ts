@@ -27,7 +27,7 @@ export interface MatchedGpsPoint {
   roadnetwork_edge_id: number;
   matched_coord: Coord;
   predicted_gps_coord: Coord;
-  edge_initial_bearing: number;
+  segment_initial_bearing: number;
 }
 
 export interface MapMatchRequest {
@@ -50,7 +50,7 @@ export interface MapMatchResponse {
     candidates: Candidate[];
     speed_mean_k: number;
     speed_std_k: number;
-    edge_initial_bearing: number;
+    segment_initial_bearing: number;
   };
 }
 
